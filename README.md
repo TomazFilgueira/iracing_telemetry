@@ -46,11 +46,11 @@ pip install -r requirements.txt
 
 The system is designed for high-efficiency operation during race sessions. You do not need to manually configure paths or open multiple terminals.
 
-1. **Initialization**: Run `RACE_START.bat` from the project root. This will automatically:
+1. **Initialization**: Run `RACE_START.bat` from the project root after Iracing **opened**. This will automatically:
     * Start the telemetry collection engine in a dedicated background terminal.
     * Launch the Streamlit dashboard server.
     * Open the strategy interface in your default web browser.
-2. **Monitoring**: Use the dashboard to track live lap trends, fuel consumption, and finish-line projections.
+2. **Monitoring**: Use the dashboard to track live lap trends, fuel consumption, and finish-line projections. Consider looking for local IP and access through mobile phone
 3. **Termination**: Run `RACE_STOP.bat` once your stint is complete. This script will:
     * Safely terminate all active telemetry and dashboard processes.
     * Automatically archive the current session log to the historical storage folder.
