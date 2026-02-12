@@ -1,4 +1,6 @@
 import streamlit as st
+import os
+import signal
 import pandas as pd
 import time
 import glob
@@ -43,3 +45,12 @@ else:
     st.warning("Aguardando gravação do primeiro log...")
     time.sleep(5)
     st.rerun()
+
+
+
+# No final do seu código do dashboard:
+if st.button("🔴 Encerrar Dashboard"):
+    st.warning("Encerrando o servidor do Dashboard...")
+    time.sleep(2)
+    # Envia um sinal para o próprio processo se encerrar
+    os.kill(os.getpid(), signal.SIGTERM)    
