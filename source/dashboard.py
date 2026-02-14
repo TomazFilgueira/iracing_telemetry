@@ -26,19 +26,14 @@ def render_metrics(df):
 
     last_row = df.iloc[-1]
     
-    # --- SELETOR DE POSIÇÃO COM CORES DINÂMICAS ---
-    pos_mode = st.radio(
-        "Filtro de Posição (Troca a cor do banner abaixo):",
-        ["Classe (Categoria)", "Geral (Overall)"],
-        horizontal=True
-    )
+      
+    msg = f"🔴 **GERAL** | Equipe: {last_row['Equipe']}  Posição: P{int(last_row.get('Pos_Geral', 0))}"
+    st.error(msg)
+
+    msg = f"🔹 **CLASSE** | Equipe: {last_row['Equipe']} | Posição: P{int(last_row.get('Pos_Classe', 0))}"
+    st.info(msg)
     
-    if pos_mode == "Classe (Categoria)":
-        msg = f"🔹 **MODO CLASSE ATIVO** | Equipe: {last_row['Equipe']} | Pista: {last_row['Pista']} | Posição: P{int(last_row.get('Pos_Classe', 0))}"
-        st.info(msg)
-    else:
-        msg = f"🔴 **MODO GERAL ATIVO** | Equipe: {last_row['Equipe']} | Pista: {last_row['Pista']} | Posição: P{int(last_row.get('Pos_Geral', 0))}"
-        st.error(msg)
+    
 
     st.divider()
 
