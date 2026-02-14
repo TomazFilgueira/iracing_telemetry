@@ -26,16 +26,20 @@ def render_metrics(df):
 
     last_row = df.iloc[-1]
     
+    # --- SELETOR DE POSIÇÃO COM CORES DINÂMICAS ---
+    pos_mode = st.radio(
+        "Filtro de Posição (Troca a cor do banner abaixo):",
+        ["Classe (Categoria)", "Geral (Overall)"],
+        horizontal=True
+    )
     
-    
-    # Lógica de Cores: Azul para briga direta, Vermelho para o grid todo
-    
-    msg = f"🔴 **GERAL** | Equipe: {last_row['Equipe']} | Posição: P{int(last_row.get('Pos_Geral', 0))}"
-    st.error(msg) # Banner Vermelho
+    if pos_mode == "Classe (Categoria)":
+        msg = f"🔹 **MODO CLASSE ATIVO** | Equipe: {last_row['Equipe']} | Pista: {last_row['Pista']} | Posição: P{int(last_row.get('Pos_Classe', 0))}"
+        st.info(msg)
+    else:
+        msg = f"🔴 **MODO GERAL ATIVO** | Equipe: {last_row['Equipe']} | Pista: {last_row['Pista']} | Posição: P{int(last_row.get('Pos_Geral', 0))}"
+        st.error(msg)
 
-    msg = f"🔹 **CLASSE** | Equipe: {last_row['Equipe']} | Posição: P{int(last_row.get('Pos_Classe', 0))}"
-    st.info(msg) # Banner Azul
-    
     st.divider()
 
     # --- SELEÇÃO DE PILOTO E PERFORMANCE ---
@@ -71,7 +75,8 @@ def render_metrics(df):
             y=alt.Y('Media_3_Voltas:Q'),
             tooltip=[alt.Tooltip('Volta'), alt.Tooltip('Media_Fmt', title='Média (3v)')]
         )
-        g1.altair_chart(alt.layer(line_raw, line_avg).properties(height=350, title="Ritmo: Volta vs Média Móvel"), use_container_width=True)
+        # Atualizado para width='stretch' conforme nova documentação
+        g1.altair_chart(alt.layer(line_raw, line_avg).properties(height=350, title="Ritmo: Volta vs Média Móvel"), width='stretch')
 
     y_min_f = max(0, df_p['Consumo_Volta'].min() - 0.1)
     y_max_f = df_p['Consumo_Volta'].max() + 0.1
@@ -80,7 +85,9 @@ def render_metrics(df):
         y=alt.Y('Consumo_Volta:Q', title='Consumo (L)', scale=alt.Scale(domain=[y_min_f, y_max_f])),
         tooltip=['Volta', 'Consumo_Volta']
     ).properties(height=350, title="Consumo por Volta")
-    g2.altair_chart(chart_fuel, use_container_width=True)
+    
+    # Atualizado para width='stretch' conforme nova documentação
+    g2.altair_chart(chart_fuel, width='stretch')
 
 # --- EXECUÇÃO PRINCIPAL ---
 st.title("🏎️ Real-Time Strategy & Analysis")
