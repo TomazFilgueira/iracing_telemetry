@@ -9,6 +9,3 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 REFRESH_RATE_ST = 2
 WINDOW_SIZE = 3
 
-# --- ACESSO REMOTO (NGROK) ---
-# Seus amigos devem colar o token obtido em dashboard.ngrok.com aqui
-NGROK_AUTH_TOKEN = 39XIFEp1nsVEAFvMxe68Diaune6_6PqdwZPSFwFwdZDKZMteX
