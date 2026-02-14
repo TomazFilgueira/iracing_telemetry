@@ -23,7 +23,7 @@ echo  Arquivando telemetria...
 move "%SOURCE_DIR%\stint_*.csv" "%DEST_DIR%\" >nul 2>&1
 
 if %errorlevel% equ 0 (
-    echo Sessão arquivada com sucesso em /%DEST_DIR%
+    echo Sessao arquivada com sucesso em /%DEST_DIR%
 ) else (
     echo  Nenhum arquivo novo encontrado para mover.
 )
