@@ -54,15 +54,14 @@ def render_metrics(df):
     df_p = df[df['Piloto'] == piloto_selected].copy()
     last_row = df_p.iloc[-1]
 
-    # --- SELETOR DE POSIÇÃO COM CORES DINÂMICAS ---
-    pos_mode = st.radio("Filtro de Posição:", ["Classe (Categoria)", "Geral (Overall)"], horizontal=True)
     
-    if pos_mode == "Classe (Categoria)":
-        pos_val = int(last_row.get('Pos_Classe', 0))
-        st.info(f"🔹 **MODO CLASSE ATIVO** | Posição Atual: P{pos_val}")
-    else:
-        pos_val = int(last_row.get('Pos_Geral', 0))
-        st.error(f"🔴 **MODO GERAL ATIVO** | Posição Atual: P{pos_val}")
+
+    pos_val = int(last_row.get('Pos_Geral', 0))
+    st.error(f"🔴 **GERAL** | Posição Atual: P{pos_val}")
+        
+    pos_val = int(last_row.get('Pos_Classe', 0))
+    st.info(f"🔹 **CLASSE** | Posição Atual: P{pos_val}")
+
 
     st.divider()
 
