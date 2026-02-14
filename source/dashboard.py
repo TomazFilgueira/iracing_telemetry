@@ -91,11 +91,32 @@ mode = st.sidebar.radio("Modo", ["📡 Live Telemetry", "📂 Post-Race Analysis
 
 if mode == "📡 Live Telemetry":
     live_file = get_latest_file()
+    
     if live_file:
-        render_metrics(pd.read_csv(live_file))
-        time.sleep(REFRESH_RATE_ST)
-        st.rerun()
+        try:
+            # Tenta ler o arquivo. Se estiver sendo escrito, aguarda o próximo ciclo.
+            df_live = pd.read_csv(live_file)
+            if not df_live.empty:
+                st.caption(f"📡 Monitorando: {os.path.basename(live_file)}")
+                render_metrics(df_live)
+            else:
+                st.warning("🔄 Arquivo detectado, aguardando gravação da primeira volta...")
+        except Exception:
+            # Evita erro de permissão de leitura simultânea no Windows
+            st.info("🔄 Sincronizando dados com o iRacing...")
+    else:
+        # Agora o dashboard não fica em branco, ele avisa o que está acontecendo
+        st.warning("⚠️ Aguardando início da sessão... Complete a primeira volta para gerar a telemetria.")
+
+    # --- CORREÇÃO: Rerun movido para fora do 'if live_file' ---
+    # Isso força o dashboard a sempre procurar pelo arquivo, sem precisar de clique manual
+    time.sleep(REFRESH_RATE_ST)
+    st.rerun()
+
 else:
+    # MODO ANÁLISE (Não precisa de rerun automático)
     uploaded = st.sidebar.file_uploader("Upload de Sessão (CSV)", type="csv")
     if uploaded:
         render_metrics(pd.read_csv(uploaded))
+    else:
+        st.info("Selecione um arquivo na barra lateral para analisar stints anteriores.")
