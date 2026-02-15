@@ -1,64 +1,101 @@
 import irsdk
 import time
+import numpy as np
 
-# Inicializa o SDK
 ir = irsdk.IRSDK()
 
-def get_color_pos(pos, last_pos):
-    """Retorna uma seta visual se a posição mudou."""
-    if last_pos == -1 or pos == last_pos:
-        return ""
-    return " ⬆️" if pos < last_pos else " ⬇️"
+print("🔬 DEBUG COMPLETO DE POSIÇÃO - iRacing")
+print("Comparando 3 métodos de posição\n")
 
-print("🔍 DEBUG DE POSIÇÃO EM TEMPO REAL (10Hz)")
-print("Pressione Ctrl+C para encerrar.\n")
-
-was_connected = False
-last_g = -1
-last_c = -1
+last_print_time = 0
 
 try:
     while True:
-        # Polling de conexão
         if not ir.is_connected:
+            print("⏳ Conectando ao iRacing...")
             ir.startup()
-            if was_connected:
-                print("🔴 [OFFLINE] Conexão com o simulador perdida.")
-                was_connected = False
             time.sleep(1)
             continue
 
-        if not was_connected:
-            print("🟢 [ONLINE] Conectado ao iRacing. Aguardando cockpit...")
-            was_connected = True
+        # ==============================
+        # Variáveis básicas
+        # ==============================
+        session_state = ir['SessionState']
+        session_time = ir['SessionTime']
+        lap_completed = ir['LapCompleted']
+        lap_dist = ir['LapDistPct']
 
-        my_car_idx = ir['DriverInfo']['DriverCarIdx']
+        player_idx = ir['PlayerCarIdx']
 
-        if my_car_idx >= 0:
-            # Captura de alta frequência
-            state = ir['SessionState']
-            session_time = ir['SessionTime']
-            pos_geral = ir['PlayerCarPosition']
-            pos_classe = ir['PlayerCarClassPosition']
+        # ==============================
+        # MÉTODO 1 — PlayerCarPosition
+        # ==============================
+        pos_player = ir['PlayerCarPosition']
 
-            # Formatação de saída para o CMD
-            move_g = get_color_pos(pos_geral, last_g)
-            move_c = get_color_pos(pos_classe, last_c)
+        # ==============================
+        # MÉTODO 2 — CarIdxPosition (RECOMENDADO)
+        # ==============================
+        pos_vector = ir['CarIdxPosition']
+        pos_vector_player = pos_vector[player_idx]
 
-            # Só imprime se houver dados válidos (evita lixo de carregamento)
-            if pos_geral > 0:
-                output = f"[{session_time:8.2f}s]  "
-                output += f"GERAL: P{pos_geral:<2}{move_g:<3} | "
-                output += f"CLASSE: P{pos_classe:<2}{move_c:<3}"
-                output += f" | Estado: {state}"
-                print(output)
+        # ==============================
+        # MÉTODO 3 — Ranking por distância real
+        # ==============================
+        lap_dist_vector = np.array(ir['CarIdxLapDistPct'])
+        lap_completed_vector = np.array(ir['CarIdxLapCompleted'])
 
-                last_g, last_c = pos_geral, pos_classe
-        
-        # Frequência de 10Hz para identificar o lag do buffer
-        time.sleep(0.1)
+        # Combina volta + distância
+        race_progress = lap_completed_vector + lap_dist_vector
+
+        # Remove carros inválidos
+        valid_mask = lap_dist_vector >= 0
+        race_progress_valid = race_progress[valid_mask]
+        idx_valid = np.where(valid_mask)[0]
+
+        # Ranking
+        ranking = idx_valid[np.argsort(-race_progress_valid)]
+
+        if player_idx in ranking:
+            pos_calc = np.where(ranking == player_idx)[0][0] + 1
+        else:
+            pos_calc = -1
+
+        # ==============================
+        # Verificação de posição válida
+        # ==============================
+        position_valid = (
+            session_state == 4 and
+            pos_vector_player > 0
+        )
+
+        # ==============================
+        # Print a cada 0.5s
+        # ==============================
+        if time.time() - last_print_time > 0.5:
+
+            print("=" * 70)
+            print(f"⏱️  Tempo: {session_time:8.2f}s")
+            print(f"🏁 Estado Sessão: {session_state} | Volta: {lap_completed} | Dist: {lap_dist*100:.1f}%")
+            print("-" * 70)
+
+            print(f"📊 PlayerCarPosition      : P{pos_player}")
+            print(f"📊 CarIdxPosition         : P{pos_vector_player}")
+            print(f"📊 Calculado (distância)  : P{pos_calc}")
+
+            if pos_player == 0:
+                print("⚠️ PlayerCarPosition ainda inválido")
+
+            if position_valid:
+                print("✅ Posição oficialmente válida (SessionState == 4)")
+            else:
+                print("⏳ Aguardando sessão entrar em RACING ou posição atualizar")
+
+            last_print_time = time.time()
+
+        time.sleep(0.05)
 
 except KeyboardInterrupt:
-    print("\n🛑 Debug finalizado pelo usuário.")
+    print("\n🛑 Debug encerrado.")
+
 finally:
     ir.shutdown()
