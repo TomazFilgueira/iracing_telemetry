@@ -116,7 +116,7 @@ def render_metrics(df):
     df_display['Tempo'] = df_display['Tempo'].apply(format_time)
     st.dataframe(
         df_display[['Volta', 'Tempo', 'Consumo_Volta', 'Pos_Classe', 'Timestamp']], 
-        use_container_width=True, 
+        width="content", 
         hide_index=True
     )
 
