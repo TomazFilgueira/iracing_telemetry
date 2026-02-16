@@ -50,7 +50,7 @@ def render_traffic_light(status):
             st.caption("Aguardando entrada no cockpit para iniciar a telemetria...")
 
 # ==============================
-# LÓGICA DE MÉTRICAS
+# LÓGICA PRINCIPAL
 # ==============================
 
 def render_metrics(df):
@@ -59,11 +59,31 @@ def render_metrics(df):
         st.warning("Aguardando gravação da primeira volta...")
         return
 
+    # ==============================
+    # SELEÇÃO DE PILOTO
+    # ==============================
     piloto_selected = st.selectbox("Analisar dados de:", df['Piloto'].unique())
-    df_p = df[df['Piloto'] == piloto_selected].copy()
+
+    # ==============================
+    # SELEÇÃO DE SESSÃO
+    # ==============================
+    sessions = df['Sessao'].unique().tolist()
+    default_index = sessions.index("Race") if "Race" in sessions else 0
+
+    session_selected = st.selectbox(
+        "Sessão:",
+        sessions,
+        index=default_index
+    )
+
+    # Filtra piloto + sessão
+    df_p = df[
+        (df['Piloto'] == piloto_selected) &
+        (df['Sessao'] == session_selected)
+    ].copy()
 
     if df_p.empty:
-        st.warning("Sem dados válidos para este piloto.")
+        st.warning("Sem dados válidos para este piloto nesta sessão.")
         return
 
     last_row = df_p.iloc[-1]
@@ -72,6 +92,36 @@ def render_metrics(df):
     # FILTRA VOLTAS VÁLIDAS
     # ==============================
     df_valid = df_p[df_p['Tempo'] > 0].copy()
+    laps_completed = len(df_valid)
+
+    # ==============================
+    # TOTAL ESTIMADO DA CORRIDA
+    # ==============================
+    session_laps_est = last_row.get('Voltas_Restantes_Estimadas', 0)
+    total_estimated = laps_completed + session_laps_est
+
+    # ==============================
+    # DETECÇÃO DE STINT
+    # ==============================
+    stint_laps = laps_completed
+
+    if not df_valid.empty:
+        fuel_series = df_valid['Combustivel_Restante'].values
+        pilot_series = df_valid['Piloto'].values
+
+        stint_start_index = 0
+
+        for i in range(1, len(df_valid)):
+
+            # Detecta reabastecimento
+            if fuel_series[i] > fuel_series[i - 1] + 0.5:
+                stint_start_index = i
+
+            # Detecta troca de piloto
+            if pilot_series[i] != pilot_series[i - 1]:
+                stint_start_index = i
+
+        stint_laps = len(df_valid) - stint_start_index
 
     # ==============================
     # CÁLCULOS DE COMBUSTÍVEL
@@ -79,46 +129,59 @@ def render_metrics(df):
     avg_cons_3v = last_row['Media_Consumo_3_Voltas']
     fuel_remaining = last_row['Combustivel_Restante']
     fuel_laps_est = fuel_remaining / avg_cons_3v if avg_cons_3v > 0 else 0
-    session_laps_est = last_row.get('Voltas_Restantes_Estimadas', 0)
 
+    # ==============================
+    # ALERTAS
+    # ==============================
     if fuel_laps_est > 0 and fuel_laps_est < 2.5:
-        st.error(f"⚠️ **BOX BOX BOX!** Combustível crítico: ~{fuel_laps_est:.1f} voltas restantes!")
+        st.error(f"⚠️ BOX BOX BOX! Combustível crítico: ~{fuel_laps_est:.1f} voltas restantes!")
     elif fuel_laps_est > 0 and fuel_laps_est < session_laps_est:
         st.warning(
-            f"⛽ **ATENÇÃO:** Combustível ({fuel_laps_est:.1f} v) menor que necessário ({session_laps_est:.1f} v)."
+            f"⛽ Combustível ({fuel_laps_est:.1f} v) menor que necessário ({session_laps_est:.1f} v)."
         )
 
     # ==============================
     # POSIÇÃO
     # ==============================
-    c_pos1, c_pos2 = st.columns(2)
-    with c_pos1:
-        st.error(f"🔴 **GERAL** | Posição: P{int(last_row.get('Pos_Geral', 0))}")
-    with c_pos2:
-        st.info(f"🔹 **CLASSE** | Posição: P{int(last_row.get('Pos_Classe', 0))}")
+    col_pos1, col_pos2, col_pos3 = st.columns([1,0.5,2])
+
+    with col_pos1:
+        st.error(f"🔴 GERAL | Posição: P{int(last_row.get('Pos_Geral', 0))}")
+        st.info(f"🔹 CLASSE | Posição: P{int(last_row.get('Pos_Classe', 0))}")
+
+    # ==============================
+    # VOLTAS (NN / TOTAL) + STINT
+    # ==============================
+    with col_pos2:
+        #col_lap1, col_lap2 = st.columns(2)
+
+        
+        st.metric("🏁 Voltas", f"{laps_completed} / {int(total_estimated)}")
+        st.metric("🔥 Stint Atual", f"{stint_laps}")
+    
+    with col_pos3:
+        
+        # ==============================
+        # KPIs
+        # ==============================
+        k1, k2 = st.columns(2)
+        k3, k4, k5 = st.columns(3)
+
+
+        last_valid_time = df_valid.iloc[-1]['Tempo'] if not df_valid.empty else 0
+        best_lap = df_valid['Tempo'].min() if not df_valid.empty else 0
+
+        
+        k1.metric("Última Volta", format_time(last_valid_time))
+        k2.metric("Melhor Volta", format_time(best_lap))
+        k3.metric("Consumo Médio (3v)", f"{avg_cons_3v:.3f} L")
+        k4.metric("No Tanque", f"{fuel_remaining:.2f} L")
+        k5.metric("Autonomia", f"{fuel_laps_est:.1f} v")
+
 
     st.divider()
 
-    # ==============================
-    # KPIs
-    # ==============================
-    k1, k2, k3, k4, k5 = st.columns(5)
-
-    # Última volta válida
-    last_valid_time = (
-        df_valid.iloc[-1]['Tempo'] if not df_valid.empty else 0
-    )
-
-    best_lap = (
-        df_valid['Tempo'].min() if not df_valid.empty else 0
-    )
-
-    k1.metric("Última Volta", format_time(last_valid_time))
-    k2.metric("Melhor Volta", format_time(best_lap))
-    k3.metric("Consumo Médio (3v)", f"{avg_cons_3v:.3f} L")
-    k4.metric("No Tanque", f"{fuel_remaining:.2f} L")
-    k5.metric("Autonomia", f"{fuel_laps_est:.1f} v")
-
+    
     st.divider()
 
     # ==============================
@@ -130,7 +193,6 @@ def render_metrics(df):
 
     if not df_valid.empty:
 
-        # Ritmo
         y_min = df_valid['Tempo'].min() - 0.5
         y_max = df_valid['Tempo'].max() + 0.5
 
@@ -162,7 +224,6 @@ def render_metrics(df):
             width='stretch'
         )
 
-        # Consumo
         chart_fuel = alt.Chart(df_valid).mark_bar(
             color='#FF4B4B'
         ).encode(
@@ -180,7 +241,7 @@ def render_metrics(df):
         st.info("Aguardando voltas válidas para gerar gráficos...")
 
     # ==============================
-    # TABELA HISTÓRICA
+    # TABELA
     # ==============================
     st.subheader("📝 Histórico da Sessão")
 
