@@ -6,10 +6,24 @@ import os
 import time
 from config import LOG_DIR, REFRESH_RATE_ST
 
+
+
 # ==============================
 # Configuração da Página
 # ==============================
 st.set_page_config(page_title="Strategy & Analysis Deck", layout="wide")
+st.markdown("""
+<style>
+.metric-align-top {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 
 # ==============================
 # FUNÇÕES DE UTILIDADE
@@ -62,19 +76,25 @@ def render_metrics(df):
     # ==============================
     # SELEÇÃO DE PILOTO
     # ==============================
-    piloto_selected = st.selectbox("Analisar dados de:", df['Piloto'].unique())
 
-    # ==============================
-    # SELEÇÃO DE SESSÃO
-    # ==============================
-    sessions = df['Sessao'].unique().tolist()
-    default_index = sessions.index("Race") if "Race" in sessions else 0
+    col_driver, col_race = st.columns(2)
+    with col_driver:
+        piloto_selected = st.selectbox("Analisar dados de:", df['Piloto'].unique())
 
-    session_selected = st.selectbox(
-        "Sessão:",
-        sessions,
-        index=default_index
-    )
+    with col_race:
+        # ==============================
+        # SELEÇÃO DE SESSÃO
+        # ==============================
+        sessions = df['Sessao'].unique().tolist()
+        default_index = sessions.index("Race") if "Race" in sessions else 0
+
+        session_selected = st.selectbox(
+            "Sessão:",
+            sessions,
+            index=default_index
+        )
+
+    st.divider()    
 
     # Filtra piloto + sessão
     df_p = df[
@@ -101,9 +121,11 @@ def render_metrics(df):
     total_estimated = laps_completed + session_laps_est
 
     # ==============================
-    # DETECÇÃO DE STINT
+    # DETECÇÃO DE STINT + CONTADOR
     # ==============================
+
     stint_laps = laps_completed
+    stint_number = 1
 
     if not df_valid.empty:
         fuel_series = df_valid['Combustivel_Restante'].values
@@ -113,15 +135,15 @@ def render_metrics(df):
 
         for i in range(1, len(df_valid)):
 
-            # Detecta reabastecimento
-            if fuel_series[i] > fuel_series[i - 1] + 0.5:
-                stint_start_index = i
+            refuel = fuel_series[i] > fuel_series[i - 1] + 0.5
+            driver_change = pilot_series[i] != pilot_series[i - 1]
 
-            # Detecta troca de piloto
-            if pilot_series[i] != pilot_series[i - 1]:
+            if refuel or driver_change:
+                stint_number += 1
                 stint_start_index = i
 
         stint_laps = len(df_valid) - stint_start_index
+
 
     # ==============================
     # CÁLCULOS DE COMBUSTÍVEL
@@ -146,8 +168,12 @@ def render_metrics(df):
     col_pos1, col_pos2, col_pos3 = st.columns([1,0.5,2])
 
     with col_pos1:
+        st.markdown('<div class="metric-align-top">', unsafe_allow_html=True)
+
         st.error(f"🔴 GERAL | Posição: P{int(last_row.get('Pos_Geral', 0))}")
-        st.info(f"🔹 CLASSE | Posição: P{int(last_row.get('Pos_Classe', 0))}")
+        st.info(f"🔵 CLASSE | Posição: P{int(last_row.get('Pos_Classe', 0))}")
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ==============================
     # VOLTAS (NN / TOTAL) + STINT
@@ -157,7 +183,8 @@ def render_metrics(df):
 
         
         st.metric("🏁 Voltas", f"{laps_completed} / {int(total_estimated)}")
-        st.metric("🔥 Stint Atual", f"{stint_laps}")
+        st.metric(f"🔥 Voltas do Stint {stint_number}\n", f"{stint_laps}")
+
     
     with col_pos3:
         
@@ -179,7 +206,7 @@ def render_metrics(df):
         k5.metric("Autonomia", f"{fuel_laps_est:.1f} v")
 
 
-    st.divider()
+    
 
     
     st.divider()
