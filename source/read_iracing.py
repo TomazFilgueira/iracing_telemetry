@@ -6,7 +6,7 @@ from collections import deque
 from config import LOG_DIR, WINDOW_SIZE
 
 # ==============================
-# Configuração de caminhos
+# Configuração
 # ==============================
 STATUS_PATH = LOG_DIR / "status.json"
 timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -28,23 +28,11 @@ def update_status(state, driver="---", track="---"):
     with open(STATUS_PATH, "w") as f:
         json.dump(status_data, f)
 
-
 def get_session_type(session_num):
     try:
         return ir['SessionInfo']['Sessions'][session_num]['SessionType']
     except:
         return "Sessão"
-
-
-def get_active_driver(car_idx):
-    try:
-        driver_data = ir['DriverInfo']['Drivers'][car_idx]
-        name = driver_data.get('UserName', 'Unknown')
-        user_id = driver_data.get('UserID', -1)
-        return name.strip(), user_id
-    except:
-        return "Unknown", -1
-
 
 # ==============================
 # Posição robusta
@@ -55,35 +43,25 @@ last_valid_pos_c = 0
 
 def get_valid_position():
     global last_valid_pos_g, last_valid_pos_c
-
     try:
-        player_idx = ir['DriverInfo']['DriverCarIdx']
-        if player_idx < 0:
-            return last_valid_pos_g, last_valid_pos_c
-
-        pos_vector = ir['CarIdxPosition']
-        class_vector = ir['CarIdxClassPosition']
-
-        pos_g = pos_vector[player_idx]
-        pos_c = class_vector[player_idx]
+        idx = ir['DriverInfo']['DriverCarIdx']
+        pos_g = ir['CarIdxPosition'][idx]
+        pos_c = ir['CarIdxClassPosition'][idx]
 
         if pos_g > 0:
             last_valid_pos_g = pos_g
             last_valid_pos_c = pos_c
 
         return last_valid_pos_g, last_valid_pos_c
-
     except:
         return last_valid_pos_g, last_valid_pos_c
 
-
 # ==============================
-# Variáveis de controle
+# Controle
 # ==============================
 
 last_session_num = -1
-last_completed_lap = -1
-last_recorded_val = -1.0
+last_recorded_lap_time = -1.0
 fuel_at_lap_start = -1.0
 file_initialized = False
 grid_recorded = False
@@ -91,11 +69,7 @@ grid_recorded = False
 laps_window = deque(maxlen=WINDOW_SIZE)
 fuel_window = deque(maxlen=WINDOW_SIZE)
 
-print("📡 Telemetria Dinâmica Ativa - Team Swap Safe")
-
-# ==============================
-# LOOP PRINCIPAL
-# ==============================
+print("📡 Telemetria Dinâmica Ativa - LapLastLapTime Trigger")
 
 try:
     while True:
@@ -107,166 +81,115 @@ try:
             time.sleep(1)
             continue
 
-        my_car_idx = ir['DriverInfo']['DriverCarIdx']
-        if my_car_idx < 0:
-            update_status("connected")
-            time.sleep(1)
+        car_idx = ir['DriverInfo']['DriverCarIdx']
+        if car_idx < 0:
+            time.sleep(0.2)
             continue
 
-        # ==============================
-        # Sessão
-        # ==============================
-        current_session_num = ir['SessionNum']
-        session_name = get_session_type(current_session_num)
+        # ===== PILOTO ATIVO (MESMA LÓGICA DO DEBUG FUNCIONAL) =====
+        try:
+            driver_data = ir['DriverInfo']['Drivers'][car_idx]
+            current_driver = driver_data.get('UserName', 'Unknown')
+            current_user_id = driver_data.get('UserID', -1)
+            team_name = driver_data.get('TeamName', 'N/A')
+        except:
+            current_driver = "Unknown"
+            current_user_id = -1
+            team_name = "N/A"
 
-        if current_session_num != last_session_num:
-            grid_recorded = False
-            last_completed_lap = ir['LapCompleted']
+        # ===== Sessão =====
+        session_num = ir['SessionNum']
+        session_name = get_session_type(session_num)
+
+        if session_num != last_session_num:
             laps_window.clear()
             fuel_window.clear()
-            last_session_num = current_session_num
-            print(f"🔄 Nova Sessão Detectada: {session_name}")
+            grid_recorded = False
+            last_recorded_lap_time = -1.0
+            last_session_num = session_num
+            print(f"🔄 Nova Sessão: {session_name}")
 
-        session_state = ir['SessionState']
         track_name = ir['WeekendInfo']['TrackDisplayName']
-        team_name = ir['DriverInfo']['Drivers'][my_car_idx]['TeamName']
-
-        # Piloto ativo
-        current_driver, current_user_id = get_active_driver(my_car_idx)
-
         update_status("cockpit", current_driver, track_name)
-
-        # ==============================
-        # Inicialização CSV
-        # ==============================
-        if not file_initialized:
-            pd.DataFrame(columns=[
-                "Timestamp", "Sessao", "Pista", "Equipe",
-                "Piloto", "UserID",
-                "Volta", "Tempo",
-                "Media_3_Voltas", "Consumo_Volta",
-                "Media_Consumo_3_Voltas",
-                "Combustivel_Restante",
-                "Pos_Geral", "Pos_Classe",
-                "Voltas_Restantes_Estimadas"
-            ]).to_csv(CSV_PATH, index=False)
-            file_initialized = True
 
         fuel_now = ir['FuelLevel']
         pos_g, pos_c = get_valid_position()
 
-        # ==============================
-        # GRID (Volta 0)
-        # ==============================
+        # ===== Inicializa CSV =====
+        if not file_initialized:
+            pd.DataFrame(columns=[
+                "Timestamp", "Sessao", "Pista", "Equipe",
+                "Piloto", "UserID",
+                "Tempo",
+                "Media_3_Voltas",
+                "Consumo_Volta",
+                "Media_Consumo_3_Voltas",
+                "Combustivel_Restante",
+                "Pos_Geral",
+                "Pos_Classe",
+                "Voltas_Restantes_Estimadas"
+            ]).to_csv(CSV_PATH, index=False)
+            file_initialized = True
+
+        # ===== GRID =====
         if (
             not grid_recorded
-            and session_state == 4
+            and ir['SessionState'] == 4
             and fuel_now > 0.5
-            and pos_g > 0
         ):
             fuel_at_lap_start = fuel_now
+            grid_recorded = True
+            print(f"🏁 GRID | {current_driver}")
 
-            grid_data = {
+        # ===== DETECÇÃO DE VOLTA (LapLastLapTime Trigger) =====
+        lap_last_time = ir['LapLastLapTime']
+
+        if lap_last_time > 0 and lap_last_time != last_recorded_lap_time:
+
+            time.sleep(0.8)  # consolidação leve
+
+            # Revalida piloto após consolidação
+            driver_data = ir['DriverInfo']['Drivers'][car_idx]
+            current_driver = driver_data.get('UserName', 'Unknown')
+            current_user_id = driver_data.get('UserID', -1)
+            fuel_now = ir['FuelLevel']
+
+            laps_window.append(lap_last_time)
+            avg_lap_time = sum(laps_window) / len(laps_window)
+
+            consumo = max(0.0, fuel_at_lap_start - fuel_now)
+            if 0 < consumo < 20:
+                fuel_window.append(consumo)
+
+            avg_fuel = sum(fuel_window) / len(fuel_window) if fuel_window else consumo
+
+            data = {
                 "Timestamp": time.strftime("%H:%M:%S"),
                 "Sessao": session_name,
                 "Pista": track_name,
                 "Equipe": team_name,
                 "Piloto": current_driver,
                 "UserID": current_user_id,
-                "Volta": 0,
-                "Tempo": 0.0,
-                "Media_3_Voltas": 0.0,
-                "Consumo_Volta": 0.0,
-                "Media_Consumo_3_Voltas": 0.0,
+                "Tempo": round(lap_last_time, 3),
+                "Media_3_Voltas": round(avg_lap_time, 3),
+                "Consumo_Volta": round(consumo, 3),
+                "Media_Consumo_3_Voltas": round(avg_fuel, 3),
                 "Combustivel_Restante": round(fuel_now, 3),
                 "Pos_Geral": pos_g,
                 "Pos_Classe": pos_c,
                 "Voltas_Restantes_Estimadas": 0
             }
 
-            pd.DataFrame([grid_data]).to_csv(
+            pd.DataFrame([data]).to_csv(
                 CSV_PATH, mode='a', index=False, header=False
             )
 
-            grid_recorded = True
-            print(f"🏁 GRID GRAVADO - {current_driver}")
+            print(f"🏁 Volta | {current_driver} | {lap_last_time:.3f}s")
 
-        # ==============================
-        # GRAVAÇÃO DE VOLTAS
-        # ==============================
-        completed_laps = ir['LapCompleted']
+            last_recorded_lap_time = lap_last_time
+            fuel_at_lap_start = fuel_now
 
-        if completed_laps > last_completed_lap:
-
-            # Espera consolidação completa do SDK
-            time.sleep(1.8)
-
-            # Revalida piloto após consolidação
-            current_driver, current_user_id = get_active_driver(my_car_idx)
-
-            new_time = ir['LapLastLapTime']
-
-            if new_time <= 0:
-                continue
-
-            if new_time == last_recorded_val:
-                continue
-
-            try:
-
-                laps_window.append(new_time)
-                avg_lap_time = sum(laps_window) / len(laps_window)
-
-                consumo_imediato = (
-                    max(0.0, fuel_at_lap_start - ir['FuelLevel'])
-                    if fuel_at_lap_start > ir['FuelLevel'] else 0.0
-                )
-
-                if 0 < consumo_imediato < 20:
-                    fuel_window.append(consumo_imediato)
-
-                avg_fuel_cons = (
-                    sum(fuel_window) / len(fuel_window)
-                    if fuel_window else consumo_imediato
-                )
-
-                pos_g, pos_c = get_valid_position()
-
-                data = {
-                    "Timestamp": time.strftime("%H:%M:%S"),
-                    "Sessao": session_name,
-                    "Pista": track_name,
-                    "Equipe": team_name,
-                    "Piloto": current_driver,
-                    "UserID": current_user_id,
-                    "Volta": completed_laps,
-                    "Tempo": round(new_time, 3),
-                    "Media_3_Voltas": round(avg_lap_time, 3),
-                    "Consumo_Volta": round(consumo_imediato, 3),
-                    "Media_Consumo_3_Voltas": round(avg_fuel_cons, 3),
-                    "Combustivel_Restante": round(ir['FuelLevel'], 3),
-                    "Pos_Geral": pos_g,
-                    "Pos_Classe": pos_c,
-                    "Voltas_Restantes_Estimadas": (
-                        round(ir['SessionTimeRemain'] / avg_lap_time, 2)
-                        if avg_lap_time > 0 else 0
-                    )
-                }
-
-                pd.DataFrame([data]).to_csv(
-                    CSV_PATH, mode='a', index=False, header=False
-                )
-
-                print(f"🏁 Volta {completed_laps} | {current_driver} | {new_time:.3f}s")
-
-                last_recorded_val = new_time
-                last_completed_lap = completed_laps
-                fuel_at_lap_start = ir['FuelLevel']
-
-            except:
-                continue
-
-        time.sleep(0.3)
+        time.sleep(0.2)
 
 except KeyboardInterrupt:
     update_status("offline")
