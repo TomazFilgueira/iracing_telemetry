@@ -1,39 +1,40 @@
 import irsdk
 import time
-import os
+import numpy as np
 import csv
 from datetime import datetime
 
 ir = irsdk.IRSDK()
 
-print("🔎 DEBUG DRIVER + LAP LOGGER (LapLastLapTime Trigger)")
-print("Pressione CTRL+C para sair\n")
+print("🔬 DEBUG POSIÇÃO + LOGGER CSV (USANDO CALC)")
+print("Salvando posição consolidada ao fechar volta\n")
 
-# ============================
-# Arquivo CSV
-# ============================
+# ==========================
+# CSV
+# ==========================
 
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-CSV_FILE = f"debug_team_laps_{timestamp}.csv"
+timestamp_file = datetime.now().strftime("%Y%m%d_%H%M%S")
+CSV_FILE = f"debug_pos_laps_{timestamp_file}.csv"
 
-with open(CSV_FILE, mode='w', newline='') as f:
+with open(CSV_FILE, mode="w", newline="") as f:
     writer = csv.writer(f)
     writer.writerow([
         "Timestamp",
-        "DriverName",
-        "UserID",
-        "Team",
-        "LapTime"
+        "LapNumber",
+        "LapTime",
+        "Pos_Player",
+        "Pos_CarIdx",
+        "Pos_Calc"
     ])
 
-print(f"📁 Salvando voltas em: {CSV_FILE}\n")
+print(f"📁 Salvando em: {CSV_FILE}\n")
 
-# ============================
+# ==========================
 # Controle
-# ============================
+# ==========================
 
-last_driver_id = None
-last_lap_time_saved = -1.0
+last_lap_completed = -1
+last_lap_time = -1.0
 
 def format_time(seconds):
     if seconds <= 0:
@@ -46,82 +47,108 @@ try:
     while True:
 
         if not ir.is_connected:
-            print("⏳ Aguardando conexão com iRacing...")
+            print("⏳ Conectando ao iRacing...")
             ir.startup()
             time.sleep(1)
             continue
 
-        car_idx = ir['DriverInfo']['DriverCarIdx']
-        if car_idx < 0:
-            time.sleep(0.2)
-            continue
-
-        # ===== PILOTO ATIVO (MESMA LÓGICA DO SEU DEBUG FUNCIONAL) =====
-        try:
-            driver_data = ir['DriverInfo']['Drivers'][car_idx]
-            current_driver = driver_data.get('UserName', 'Unknown')
-            current_user_id = driver_data.get('UserID', -1)
-            team_name = driver_data.get('TeamName', 'N/A')
-        except:
-            current_driver = "Unknown"
-            current_user_id = -1
-            team_name = "N/A"
-
-        # ===== TEMPOS =====
-        lap_current_time = ir['LapCurrentLapTime']
-        lap_last_time = ir['LapLastLapTime']
         session_state = ir['SessionState']
+        session_time = ir['SessionTime']
+        lap_completed = ir['LapCompleted']
+        lap_last_time = ir['LapLastLapTime']
 
-        # ===== DETECTA TROCA =====
-        if current_user_id != last_driver_id:
-            print("\n==================================================")
-            print("🔄 TROCA DE PILOTO DETECTADA")
-            print(f"Piloto atual: {current_driver}")
-            print(f"UserID: {current_user_id}")
-            print(f"Equipe: {team_name}")
-            print("==================================================\n")
-            last_driver_id = current_user_id
+        player_idx = ir['PlayerCarIdx']
 
-        # ===== DETECTA NOVA VOLTA (SEM LapCompleted) =====
-        if lap_last_time > 0 and lap_last_time != last_lap_time_saved:
+        # ==============================
+        # POSIÇÕES
+        # ==============================
 
-            time.sleep(0.8)  # consolidação leve
+        pos_player = ir['PlayerCarPosition']
+        pos_vector = ir['CarIdxPosition']
+        pos_caridx = pos_vector[player_idx]
+
+        # ===== CALC =====
+        lap_dist_vector = np.array(ir['CarIdxLapDistPct'])
+        lap_completed_vector = np.array(ir['CarIdxLapCompleted'])
+
+        race_progress = lap_completed_vector + lap_dist_vector
+
+        valid_mask = lap_dist_vector >= 0
+        race_progress_valid = race_progress[valid_mask]
+        idx_valid = np.where(valid_mask)[0]
+
+        ranking = idx_valid[np.argsort(-race_progress_valid)]
+
+        if player_idx in ranking:
+            pos_calc = np.where(ranking == player_idx)[0][0] + 1
+        else:
+            pos_calc = -1
+
+        # ==============================
+        # DETECTA FECHAMENTO DE VOLTA
+        # ==============================
+
+        if (lap_completed > last_lap_completed and lap_last_time > 0 and lap_last_time != last_lap_time):
+
+        # Espera consolidação
+            time.sleep(1.5)
+
+            # 🔁 RECALCULA POSIÇÕES APÓS CONSOLIDAÇÃO
+            pos_player = ir['PlayerCarPosition']
+            pos_vector = ir['CarIdxPosition']
+            pos_caridx = pos_vector[player_idx]
+
+            lap_dist_vector = np.array(ir['CarIdxLapDistPct'])
+            lap_completed_vector = np.array(ir['CarIdxLapCompleted'])
+
+            race_progress = lap_completed_vector + lap_dist_vector
+
+            valid_mask = lap_dist_vector >= 0
+            race_progress_valid = race_progress[valid_mask]
+            idx_valid = np.where(valid_mask)[0]
+
+            ranking = idx_valid[np.argsort(-race_progress_valid)]
+
+            if player_idx in ranking:
+                pos_calc = np.where(ranking == player_idx)[0][0] + 1
+            else:
+                pos_calc = -1
 
             timestamp_now = datetime.now().strftime("%H:%M:%S")
 
-            print("\n--------------------------------------------------")
-            print("🏁 VOLTA FINALIZADA")
-            print(f"Piloto registrado: {current_driver}")
-            print(f"Tempo da volta: {format_time(lap_last_time)}")
-            print("--------------------------------------------------\n")
+            print("\n" + "="*70)
+            print("🏁 VOLTA FINALIZADA (CONSOLIDADA)")
+            print(f"Nº Volta: {lap_completed}")
+            print(f"Tempo: {format_time(lap_last_time)}")
+            print(f"Posições → Player:{pos_player} | CarIdx:{pos_caridx} | Calc:{pos_calc}")
+            print("="*70 + "\n")
 
-            # ===== SALVA NO CSV =====
-            with open(CSV_FILE, mode='a', newline='') as f:
+            with open(CSV_FILE, mode="a", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow([
                     timestamp_now,
-                    current_driver,
-                    current_user_id,
-                    team_name,
-                    round(lap_last_time, 3)
+                    lap_completed,
+                    round(lap_last_time, 3),
+                    pos_player,
+                    pos_caridx,
+                    pos_calc
                 ])
 
-            last_lap_time_saved = lap_last_time
+            last_lap_completed = lap_completed
+            last_lap_time = lap_last_time
 
-        # ===== PRINT EM TEMPO REAL =====
-        os.system('cls' if os.name == 'nt' else 'clear')
 
-        print("🔎 DEBUG TEMPO EM TEMPO REAL")
-        print("------------------------------------------")
-        print(f"Piloto ativo: {current_driver}")
-        print(f"UserID: {current_user_id}")
-        print(f"Equipe: {team_name}")
-        print(f"Tempo volta atual: {format_time(lap_current_time)}")
-        print(f"Última volta registrada: {format_time(lap_last_time)}")
-        print(f"SessionState: {session_state}")
-        print("------------------------------------------")
+        # ==============================
+        # PRINT CONTÍNUO
+        # ==============================
 
-        time.sleep(0.2)
+        print("-"*70)
+        print(f"⏱️  Tempo Sessão: {session_time:8.2f}s")
+        print(f"🏁 Estado: {session_state} | Volta: {lap_completed}")
+        print(f"Posições atuais → Player:{pos_player} | CarIdx:{pos_caridx} | Calc:{pos_calc}")
+        print("-"*70)
+
+        time.sleep(1)
 
 except KeyboardInterrupt:
     print("\n🛑 Debug encerrado.")

@@ -146,7 +146,10 @@ try:
 
         if lap_last_time > 0 and lap_last_time != last_recorded_lap_time:
 
-            time.sleep(0.8)  # consolidação leve
+            time.sleep(1)  # consolidação leve
+
+            #Calcula posições após consolidação de volta
+            pos_g, pos_c = get_valid_position()
 
             # Revalida piloto após consolidação
             driver_data = ir['DriverInfo']['Drivers'][car_idx]
