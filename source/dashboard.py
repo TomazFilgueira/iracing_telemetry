@@ -162,11 +162,32 @@ def render_metrics(df):
         avg = base.mark_line(color='#FFD700', strokeWidth=3).encode(y='Media_3_Voltas:Q')
         g1.altair_chart(alt.layer(line, avg).properties(height=350, title="Consistência de Ritmo"), use_container_width=True)
 
-        chart_fuel = alt.Chart(df_valid).mark_bar(color='#FF4B4B').encode(
-            x='Volta:O', y=alt.Y('Consumo_Volta:Q', title='Consumo (Litros)'),
-            tooltip=['Volta', 'Consumo_Volta']
-        ).properties(height=350, title="Consumo por Volta")
-        g2.altair_chart(chart_fuel, use_container_width=True)
+        base_fuel = alt.Chart(df_valid).encode(
+    x=alt.X('Volta:O', title='Nº da Volta')
+)
+
+    fuel_line = base_fuel.mark_line(point=True).encode(
+        y=alt.Y('Consumo_Volta:Q', title='Consumo (Litros)'),
+        tooltip=['Volta', 'Consumo_Volta']
+    )
+
+    fuel_avg = base_fuel.mark_line(
+        color='#FFD700',
+        strokeWidth=3
+    ).encode(
+        y='Media_Consumo_3_Voltas:Q'
+    )
+
+    chart_fuel = alt.layer(
+        fuel_line,
+        fuel_avg
+    ).properties(
+        height=350,
+        title="Consistência de Consumo"
+    )
+
+    g2.altair_chart(chart_fuel, use_container_width=True)
+
 
     # --- TABELA ---
     st.subheader("📝 Histórico da Sessão")
