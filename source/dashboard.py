@@ -111,9 +111,12 @@ def render_metrics(df):
     # ==============================
     # FILTRA VOLTAS VÁLIDAS
     # ==============================
+    
     df_valid = df_p[df_p['Tempo'] > 0].copy()
-    laps_completed = len(df_valid)
+    df_valid = df_valid.reset_index(drop=True)
+    df_valid["Volta"] = df_valid.index + 1
 
+    laps_completed = len(df_valid)
     # ==============================
     # TOTAL ESTIMADO DA CORRIDA
     # ==============================
@@ -248,7 +251,7 @@ def render_metrics(df):
                 height=350,
                 title="Consistência de Ritmo"
             ),
-            width='stretch'
+             use_container_width=True
         )
 
         chart_fuel = alt.Chart(df_valid).mark_bar(
@@ -262,7 +265,7 @@ def render_metrics(df):
             title="Consumo por Volta"
         )
 
-        g2.altair_chart(chart_fuel, width='stretch')
+        g2.altair_chart(chart_fuel, use_container_width=True)
 
     else:
         st.info("Aguardando voltas válidas para gerar gráficos...")
@@ -277,7 +280,7 @@ def render_metrics(df):
 
     st.dataframe(
         df_display[['Volta', 'Tempo', 'Consumo_Volta', 'Pos_Classe', 'Timestamp']],
-        width="content",
+        use_container_width=True,
         hide_index=True
     )
 
