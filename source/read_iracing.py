@@ -157,9 +157,25 @@ try:
             current_user_id = driver_data.get('UserID', -1)
             fuel_now = ir['FuelLevel']
 
+            #Tempo médio das últimas voltas
             laps_window.append(lap_last_time)
             avg_lap_time = sum(laps_window) / len(laps_window)
 
+            # Estimativa de voltas restantes
+            session_laps_remain = ir['SessionLapsRemain']
+            session_time_remain = ir['SessionTimeRemain']
+
+            # Detecta sessão por tempo (32767 é valor inválido)
+            if session_laps_remain > 0 and session_laps_remain < 10000:
+                voltas_estimadas = session_laps_remain
+
+            elif avg_lap_time > 0 and session_time_remain > 0:
+                voltas_estimadas = round(session_time_remain / avg_lap_time, 1)
+
+            else:
+                voltas_estimadas = 0            
+
+            #Calculo de consumo por volta
             consumo = max(0.0, fuel_at_lap_start - fuel_now)
             if 0 < consumo < 20:
                 fuel_window.append(consumo)
@@ -180,7 +196,7 @@ try:
                 "Combustivel_Restante": round(fuel_now, 3),
                 "Pos_Geral": pos_g,
                 "Pos_Classe": pos_c,
-                "Voltas_Restantes_Estimadas": 0
+                "Voltas_Restantes_Estimadas": voltas_estimadas
             }
 
             pd.DataFrame([data]).to_csv(
