@@ -1,0 +1,13 @@
+@echo off
+title iRacing Client - Telemetry
+
+:: Ajuste o caminho abaixo se o seu Anaconda estiver em um local diferente
+set CONDA_ACTIVATE_PATH=C:\Users\%USERNAME%\anaconda3\Scripts\activate.bat
+set ENV_NAME=ir_telemetry
+
+echo 🏎️ Ativando ambiente e conectando ao iRacing...
+
+:: Executa o coletor
+cmd /k "%CONDA_PATH% activate ir_telemetry && python post_cloud.py"
+
+pause

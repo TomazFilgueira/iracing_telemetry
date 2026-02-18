@@ -24,6 +24,7 @@ class TelemetryData(BaseModel):
     fuel: float
     position: int
     timestamp: str
+    state: str # <--- OBRIGATÓRIO: Para o semáforo funcionar
 
 # ===============================
 # Endpoint para receber dados
