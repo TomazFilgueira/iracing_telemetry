@@ -22,19 +22,20 @@ while True:
     fuel -= round(random.uniform(0.1, 0.2), 3)
 
     data = {
-        "session_id": SESSION_ID,
-        "driver": driver_name,
-        "user_id": user_id,
-        "lap": lap,
-        "lap_time": lap_time,
-        "fuel": round(fuel, 3),
-        "position": random.randint(1, 5),
-        "timestamp": datetime.now().strftime("%H:%M:%S")
-    }
+    "session_id": SESSION_ID,
+    "driver": driver_name,
+    "user_id": user_id,
+    "lap": lap,
+    "lap_time": lap_time,
+    "fuel": round(fuel, 3),
+    "position": random.randint(1, 5),
+    "timestamp": datetime.now().strftime("%H:%M:%S"),
+    "state": "cockpit"  # <--- Enviando o status dinamicamente
+    }   
 
     try:
         response = requests.post(SERVER_URL, json=data)
-        print(f"🏁 Lap {lap} enviada | {lap_time}s | Fuel: {fuel:.2f}")
+        print(f"🏁 Lap {lap} enviada | {lap_time}s | Fuel: {fuel:.2f} | Status: {data['state']}")
     except Exception as e:
         print("❌ Erro ao enviar:", e)
 
