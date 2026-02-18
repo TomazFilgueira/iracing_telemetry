@@ -8,6 +8,6 @@ set ENV_NAME=ir_telemetry
 echo 🏎️ Ativando ambiente e conectando ao iRacing...
 
 :: Executa o coletor
-cmd /k "%CONDA_PATH% activate ir_telemetry && python post_cloud.py"
+cmd /k "%CONDA_ACTIVATE_PATH% %ENV_NAME% && python read_iracing_cloud.py"
 
 pause
