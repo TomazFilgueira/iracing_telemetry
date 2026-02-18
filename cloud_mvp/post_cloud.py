@@ -10,7 +10,7 @@ from config import LOG_DIR, WINDOW_SIZE
 # Configuração Cloud
 # ==============================
 # Substitua pelo seu IP Público ou endereço do servidor hospedado
-SERVER_URL = "http://127.0.0.1:8000/telemetry" 
+SERVER_URL = "https://spondylitic-junior-obedient.ngrok-free.dev/telemetry" 
 SESSION_ID = "Daytona_Test" # Deve ser igual ao que você digita no Dashboard
 
 # ==============================
