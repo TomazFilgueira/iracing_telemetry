@@ -61,15 +61,7 @@ def fetch_cloud_data(url):
 
             if "Sessao" not in df.columns: df["Sessao"] = "Race"
             
-            # Cálculos de Média para os Gráficos
-            if "Tempo" in df.columns:
-                df["Media_3_Voltas"] = df["Tempo"].rolling(3).mean().fillna(df["Tempo"])
             
-            if "Combustivel_Restante" in df.columns:
-                df["Consumo_Volta"] = df["Combustivel_Restante"].shift(1) - df["Combustivel_Restante"]
-                df["Consumo_Volta"] = df["Consumo_Volta"].fillna(0).abs()
-                df["Media_Consumo_3_Voltas"] = df["Consumo_Volta"].rolling(3).mean().fillna(0)
-
             return df
         return pd.DataFrame()
     except Exception as e:
@@ -196,14 +188,28 @@ def render_metrics(df):
     last_global_id = df_p['global_stint_id'].iloc[-1]
     df_this_stint = df_p[df_p['global_stint_id'] == last_global_id]
     stint_laps = len(df_this_stint[df_this_stint['Tempo'] > 0])
+    
+    # 1. Filtramos apenas as voltas de corrida válidas primeiro
     df_valid = df_p[df_p['Tempo'] > 0].copy().sort_values("Volta")
-    last_row = df_p.iloc[-1]
 
-    avg_cons_3v = last_row.get('Media_Consumo_3_Voltas', 0)
+    # 2. A MÁGICA ACONTECE AQUI: Recalculamos as estatísticas apenas nas voltas reais
+    if not df_valid.empty:
+        df_valid["Media_3_Voltas"] = df_valid["Tempo"].rolling(3).mean().fillna(df_valid["Tempo"])
+        
+        # Consumo real isolando os "heartbeats" parados
+        df_valid["Consumo_Volta"] = df_valid["Combustivel_Restante"].shift(1) - df_valid["Combustivel_Restante"]
+        # Limpa o consumo se houver pitstop (reabastecimento gera números negativos)
+        df_valid["Consumo_Volta"] = df_valid["Consumo_Volta"].apply(lambda x: x if 0 < x < 20 else 0)
+        df_valid["Media_Consumo_3_Voltas"] = df_valid["Consumo_Volta"].rolling(3).mean().fillna(df_valid["Consumo_Volta"])
+
+    last_row = df_p.iloc[-1] # Mantém para ler a posição global e combustível bruto atual
+
+    # 3. Métricas do Topo da Tela extraídas dos dados limpos
+    avg_cons_3v = df_valid.iloc[-1].get('Media_Consumo_3_Voltas', 0) if not df_valid.empty else 0
     fuel_remaining = last_row['Combustivel_Restante']
     fuel_laps_est = fuel_remaining / avg_cons_3v if avg_cons_3v > 0 else 0
 
-    # Blocos de Métricas
+    # Blocos de Métricas Visuais
     st.subheader("🏎️ Dados Gerais da Equipe")
     col_e1, col_e2, col_e3 = st.columns(3)
     col_e1.metric("Voltas Totais (Sessão)", int(df_session["Volta"].max()) if not df_session.empty else 0)
@@ -221,20 +227,35 @@ def render_metrics(df):
     col_p5.metric("Melhor Volta", format_time(df_valid['Tempo'].min() if not df_valid.empty else 0))
     col_p6.metric("Autonomia Estimada", f"{fuel_laps_est:.1f} v")
 
-    # Gráficos
+    # Gráficos com Escalas Unificadas
     st.subheader("📈 Análise de Ritmo e Consumo")
     g1, g2 = st.columns(2)
+    
     if not df_valid.empty:
+        # AQUI FORÇAMOS A MESMA ESCALA PARA AS DUAS LINHAS
         y_min, y_max = df_valid['Tempo'].min() - 0.5, df_valid['Tempo'].max() + 0.5
+        c_max = df_valid['Consumo_Volta'].max() + 0.5
+        
         base = alt.Chart(df_valid).encode(x=alt.X('Volta:O', title='Nº da Volta'))
-        line = base.mark_line(point=True, opacity=0.4).encode(y=alt.Y('Tempo:Q', scale=alt.Scale(domain=[y_min, y_max])))
-        avg_line = base.mark_line(color='#FFD700', strokeWidth=3).encode(y='Media_3_Voltas:Q')
+
+        # Gráfico 1: Consistência
+        line = base.mark_line(point=True, opacity=0.4).encode(
+            y=alt.Y('Tempo:Q', scale=alt.Scale(domain=[y_min, y_max]), title='Tempo (s)')
+        )
+        avg_line = base.mark_line(color='#FFD700', strokeWidth=3).encode(
+            y=alt.Y('Media_3_Voltas:Q', scale=alt.Scale(domain=[y_min, y_max]))
+        )
         g1.altair_chart(alt.layer(line, avg_line).properties(title="Consistência de Ritmo", height=300), use_container_width=True)
 
-        f_line = base.mark_line(point=True, color='#FF4B4B').encode(y='Consumo_Volta:Q')
-        f_avg = base.mark_line(color='#FFD700', strokeWidth=3).encode(y='Media_Consumo_3_Voltas:Q')
+        # Gráfico 2: Consumo
+        f_line = base.mark_line(point=True, color='#FF4B4B').encode(
+            y=alt.Y('Consumo_Volta:Q', scale=alt.Scale(domain=[0, c_max]), title='Consumo (L)')
+        )
+        f_avg = base.mark_line(color='#FFD700', strokeWidth=3).encode(
+            y=alt.Y('Media_Consumo_3_Voltas:Q', scale=alt.Scale(domain=[0, c_max]))
+        )
         g2.altair_chart(alt.layer(f_line, f_avg).properties(title="Histórico de Consumo", height=300), use_container_width=True)
-
+        
 # ==============================
 # EXECUÇÃO PRINCIPAL
 # ==============================
@@ -249,7 +270,7 @@ if app_mode == "📡 Live Telemetry":
     conn_mode = st.sidebar.selectbox("Fonte de Dados", ["Local (Pasta/CSV)", "Cloud (API Server)"])
     
     if conn_mode == "Cloud (API Server)":
-        server_ip = st.sidebar.text_input("IP/URL do Servidor", "127.0.0.1")
+        server_ip = st.sidebar.text_input("IP/URL do Servidor", "spondylitic-junior-obedient.ngrok-free.dev")
         session_id = st.sidebar.text_input("ID Sessão", "Daytona_Test")
         
         # Limpeza inteligente da URL para NGROK

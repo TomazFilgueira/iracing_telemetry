@@ -21,9 +21,16 @@ start "FastAPI Server" cmd /k "call "%CONDA_ACTIVATE_PATH%" %ENV_NAME% && uvicor
 
 timeout /t 3
 
+:: Inicia o Túnel Ngrok
+echo 🌐 Iniciando Ngrok na porta 8000...
+start "Ngrok Tunnel" cmd /k "ngrok http 8000"
+
+timeout /t 2
+
 :: Inicia o Dashboard Streamlit
 echo 📊 Iniciando Dashboard...
 start "Strategy Dashboard" cmd /k "call "%CONDA_ACTIVATE_PATH%" %ENV_NAME% && streamlit run dashboard_cloud.py"
 
-echo ✅ Tudo pronto! Agora abra o ngrok para gerar o link da nuvem.
+echo ✅ Tudo pronto! 
+echo 📌 Copie a URL (https://...) da janela do Ngrok e envie para a sua equipe
 pause
