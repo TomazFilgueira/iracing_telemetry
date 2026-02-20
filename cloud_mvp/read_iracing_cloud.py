@@ -41,9 +41,10 @@ def send_to_cloud(data):
             "state": data["state"]
         }
         # Timeout curto para não travar a telemetria
-        requests.post(SERVER_URL, json=cloud_payload, timeout=0.5)
+        requests.post(SERVER_URL, json=cloud_payload, timeout=2.0)
         return True
-    except:
+    except Exception as e:
+        print(f"⚠️ Erro no Envio: {e}")
         return False
 
 # Variável global para controlar a frequência do Heartbeat
@@ -152,8 +153,17 @@ try:
         session_name = get_session_type(session_num)
         track_name = ir['WeekendInfo']['TrackDisplayName']
         
-        # Define Estado e atualiza Heartbeat com DADOS REAIS
-        current_state = "cockpit" if ir['SessionState'] > 3 else "connected"
+       
+        
+        
+        
+        # --- VERIFICAÇÃO DE CONTROLE FÍSICO ---
+        is_driving = ir['IsOnTrack'] 
+        
+        #current_state = "cockpit" if ir['SessionState'] > 3 else "connected"
+        
+        # Define Estado com base no is_driving
+        current_state = "cockpit" if is_driving else "connected"
         update_status_and_heartbeat(current_state, current_driver, track_name, fuel_now, pos_g)
 
         if session_num != last_session_num:
@@ -185,9 +195,10 @@ try:
         # ===== DETECÇÃO DE VOLTA =====
         lap_last_time = ir['LapLastLapTime']
 
-        if lap_last_time > 0 and lap_last_time != last_recorded_lap_time:
+        # --- AQUI: Só processa e envia a volta se is_driving for True ---
+        if lap_last_time > 0 and lap_last_time != last_recorded_lap_time and is_driving:
 
-            time.sleep(0.8)  # Consolidação leve
+            time.sleep(1.5)  # Consolidação leve
 
             # --- ESTRATÉGIA DE EQUIPE: CONTAGEM GLOBAL ---
             # CarIdxLap pega a volta do carro no servidor, independente de quem pilota
@@ -233,7 +244,8 @@ try:
                 "Consumo_Volta": round(consumo, 3), "Media_Consumo_3_Voltas": round(avg_fuel, 3),
                 "Combustivel_Restante": round(fuel_now, 3),
                 "Pos_Geral": pos_g, "Pos_Classe": pos_c,
-                "Voltas_Restantes_Estimadas": voltas_estimadas
+                "Voltas_Restantes_Estimadas": voltas_estimadas,
+                "state": current_state 
             }
 
             # 1. Salva Local
