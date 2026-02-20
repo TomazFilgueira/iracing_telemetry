@@ -143,14 +143,31 @@ def render_traffic_light(status_data, is_cloud=False, df=None):
 def render_metrics(df):
     if df.empty: return
 
+    # --- SELEÇÃO AUTOMÁTICA DE PILOTO E SESSÃO ---
     col_driver, col_race = st.columns(2)
+    
+    # 1. Identifica os pilotos disponíveis
+    pilotos_disponiveis = df['Piloto'].unique().tolist()
+    piloto_ativo = pilotos_disponiveis[0] if pilotos_disponiveis else "---"
+    
+    # 2. Descobre quem está fisicamente no carro (último state == 'cockpit')
+    if 'state' in df.columns:
+        df_cockpit = df[df['state'] == 'cockpit']
+        if not df_cockpit.empty:
+            piloto_ativo = df_cockpit.iloc[-1]['Piloto']
+            
+    # 3. Define o índice padrão do selectbox dinamicamente
+    default_driver_idx = pilotos_disponiveis.index(piloto_ativo) if piloto_ativo in pilotos_disponiveis else 0
+    
     with col_driver:
-        piloto_selected = st.selectbox("Analisar dados de:", df['Piloto'].unique())
+        piloto_selected = st.selectbox("Analisar dados de:", pilotos_disponiveis, index=default_driver_idx)
+        
     with col_race:
         sessions = df['Sessao'].unique().tolist()
         default_index = sessions.index("Race") if "Race" in sessions else 0
         session_selected = st.selectbox("Sessão:", sessions, index=default_index)
 
+    st.divider()
     st.divider()
 
     df_session = df[df['Sessao'] == session_selected].copy()
