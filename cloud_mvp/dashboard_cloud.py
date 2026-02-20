@@ -102,34 +102,47 @@ def normalize_telemetry(df):
 def render_traffic_light(status_data, is_cloud=False, df=None):
     if is_cloud:
         if df is not None and not df.empty:
-            last_entry = df.iloc[-1]
-            try:
-                last_ts = datetime.strptime(last_entry['Timestamp'], "%H:%M:%S")
-                now_ts = datetime.strptime(datetime.now().strftime("%H:%M:%S"), "%H:%M:%S")
-                diff = abs((now_ts - last_ts).total_seconds())
-            except:
-                diff = 0
-
-            if diff > 15:
-                st.error(f"🔴 CLOUD DISCONNECTED (Inativo há {int(diff)}s)")
-                return
-
-            state = last_entry.get("state", "cockpit") 
-            driver = last_entry.get("Piloto", "---")
-            colors = {"offline": "🔴", "connected": "🟡", "cockpit": "🟢"}
-            labels = {"offline": "OFFLINE", "connected": "NO MENU", "cockpit": "READY (PISTA)"}
+            st.subheader("📡 Status da Equipe (Cloud)")
             
-            col1, col2 = st.columns([1, 4])
-            with col1: st.subheader(f"{colors.get(state, '⚪')} {labels.get(state, 'CLOUD')}")
-            with col2: st.caption(f"👤 Piloto: {driver} | 🛰️ Latência: {int(diff)}s")
+            # 1. Agrupa pelo Piloto e pega apenas o último heartbeat de cada um
+            df_last_status = df.groupby('Piloto').tail(1)
+            
+            # 2. Cria colunas dinâmicas (uma para você, uma pro Rodrigo, etc.)
+            cols = st.columns(len(df_last_status))
+            
+            colors = {"offline": "🔴", "connected": "🟡", "cockpit": "🟢"}
+            labels = {"offline": "OFFLINE", "connected": "BOX / MENU", "cockpit": "NO CARRO"}
+
+            # 3. Renderiza o status individual
+            for idx, row in enumerate(df_last_status.itertuples()):
+                state = getattr(row, "state", "offline")
+                driver = getattr(row, "Piloto", "Unknown")
+                timestamp_str = getattr(row, "Timestamp", "00:00:00")
+                
+                # Cálculo de latência para detectar se a internet do piloto caiu
+                try:
+                    last_ts = datetime.strptime(timestamp_str, "%H:%M:%S")
+                    now_ts = datetime.strptime(datetime.now().strftime("%H:%M:%S"), "%H:%M:%S")
+                    diff = abs((now_ts - last_ts).total_seconds())
+                except:
+                    diff = 0
+                
+                # Se o piloto não manda heartbeat há mais de 15s, consideramos que ele fechou o script
+                if diff > 15:
+                    state = "offline"
+
+                with cols[idx]:
+                    st.markdown(f"**{colors.get(state, '⚪')} {driver}**")
+                    st.caption(f"{labels.get(state, '---')} | Latência: {int(diff)}s")
         else:
-            st.info("⚪ AGUARDANDO CLOUD...")
+            st.info("⚪ AGUARDANDO CONEXÃO DA EQUIPE...")
     else:
+        # Lógica original mantida para o modo Local
         state = status_data.get("state", "offline")
         colors = {"offline": "🔴", "connected": "🟡", "cockpit": "🟢"}
         labels = {"offline": "DESCONECTADO", "connected": "MENU", "cockpit": "READY (COCKPIT)"}
         col1, col2 = st.columns([1, 4])
-        with col1: st.subheader(f"{colors[state]} {labels[state]}")
+        with col1: st.subheader(f"{colors.get(state, '⚪')} {labels.get(state, '---')}")
         with col2:
             if state == "cockpit":
                 st.caption(f"👤 Piloto: {status_data.get('driver', '---')} | 📍 Pista: {status_data.get('track', '---')}")
