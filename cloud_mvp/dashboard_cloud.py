@@ -238,35 +238,51 @@ def render_metrics(df):
     col_p5.metric("Melhor Volta", format_time(df_valid['Tempo'].min() if not df_valid.empty else 0))
     col_p6.metric("Autonomia Estimada", f"{fuel_laps_est:.1f} v")
 
+    
     # Gráficos com Escalas Unificadas
     st.subheader("📈 Análise de Ritmo e Consumo")
     g1, g2 = st.columns(2)
     
     if not df_valid.empty:
+        # 1. CRIAMOS COLUNAS FORMATADAS PARA O TOOLTIP
+        df_valid['Tempo_Tooltip'] = df_valid['Tempo'].apply(format_time)
+        df_valid['Media_Tooltip'] = df_valid['Media_3_Voltas'].apply(format_time)
+
         # FORÇAMOS A MESMA ESCALA PARA AS DUAS LINHAS
         y_min, y_max = df_valid['Tempo'].min() - 0.5, df_valid['Tempo'].max() + 0.5
         c_max = df_valid['Consumo_Volta'].max() + 0.5
         
         base = alt.Chart(df_valid).encode(x=alt.X('Volta:O', title='Nº da Volta'))
 
-        # Gráfico 1: Consistência
+        # Gráfico 1: Consistência (Formatado para mm:ss)
+        # labelExpr: Converte os segundos do eixo Y em mm:ss visualmente
+        time_axis = alt.Axis(
+            title='Tempo (mm:ss)',
+            labelExpr="floor(datum.value / 60) + ':' + (floor(datum.value % 60) < 10 ? '0' : '') + (datum.value % 60).toFixed(0)"
+        )
+
         line = base.mark_line(point=True, opacity=0.4).encode(
-            y=alt.Y('Tempo:Q', scale=alt.Scale(domain=[y_min, y_max]), title='Tempo (s)')
+            y=alt.Y('Tempo:Q', scale=alt.Scale(domain=[y_min, y_max]), axis=time_axis),
+            tooltip=[alt.Tooltip('Volta:O'), alt.Tooltip('Tempo_Tooltip:N', title='Tempo')]
         )
+        
         avg_line = base.mark_line(color='#FFD700', strokeWidth=3).encode(
-            y=alt.Y('Media_3_Voltas:Q', scale=alt.Scale(domain=[y_min, y_max]))
+            y=alt.Y('Media_3_Voltas:Q', scale=alt.Scale(domain=[y_min, y_max])),
+            tooltip=[alt.Tooltip('Volta:O'), alt.Tooltip('Media_Tooltip:N', title='Média (3v)')]
         )
+        
         g1.altair_chart(alt.layer(line, avg_line).properties(title="Consistência de Ritmo", height=300), width='stretch')
 
-        # Gráfico 2: Consumo
+        # Gráfico 2: Consumo (Mantido original)
         f_line = base.mark_line(point=True, color='#FF4B4B').encode(
-            y=alt.Y('Consumo_Volta:Q', scale=alt.Scale(domain=[0, c_max]), title='Consumo (L)')
+            y=alt.Y('Consumo_Volta:Q', scale=alt.Scale(domain=[0, c_max]), title='Consumo (L)'),
+            tooltip=['Volta:O', 'Consumo_Volta:Q']
         )
         f_avg = base.mark_line(color='#FFD700', strokeWidth=3).encode(
-            y=alt.Y('Media_Consumo_3_Voltas:Q', scale=alt.Scale(domain=[0, c_max]))
+            y=alt.Y('Media_Consumo_3_Voltas:Q', scale=alt.Scale(domain=[0, c_max])),
+            tooltip=['Volta:O', 'Media_Consumo_3_Voltas:Q']
         )
         g2.altair_chart(alt.layer(f_line, f_avg).properties(title="Histórico de Consumo", height=300), width='stretch')
-        
 # ==============================
 # EXECUÇÃO PRINCIPAL
 # ==============================
