@@ -1,0 +1,24 @@
+services:
+ 
+  # Serviço 1: API FastAPI
+  - type: web
+    name: iracing-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port 8000
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+           value: 3.11.0
+ 
+  # Serviço 2: Dashboard Streamlit
+  - type: web
+    name: iracing-dashboard
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run dashboard_cloud.py --server.port 8501 --server.address 0.0.0.0
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
