@@ -41,10 +41,16 @@ def get_status_local():
         return {"state": "offline", "driver": "---", "track": "---"}
 
 def fetch_cloud_data(url):
-    # Header obrigatório para pular o aviso do ngrok
-    headers = {'ngrok-skip-browser-warning': 'true'}
+    # Headers obrigatórios para pular os bloqueios do Ngrok e do LocalTunnel
+    headers = {
+        'ngrok-skip-browser-warning': 'true',
+        'Bypass-Tunnel-Reminder': 'true',
+        'User-Agent': 'iRacingTelemetryDashboard/1.0'
+    }
     try:
         response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status() # Faz o painel avisar se o link estiver quebrado
+        
         if response.status_code == 200:
             data = response.json()
             if not data: return pd.DataFrame()
@@ -58,14 +64,13 @@ def fetch_cloud_data(url):
                 "timestamp": "Timestamp", "state": "state"
             }
             df = df.rename(columns={k: v for k, v in mapping.items() if k in df.columns})
-
             if "Sessao" not in df.columns: df["Sessao"] = "Race"
-            
             
             return df
         return pd.DataFrame()
     except Exception as e:
-        # Silencia erros de conexão na interface principal para não poluir
+        # Se der erro de conexão, mostra um aviso vermelho no topo da tela
+        st.error(f"⚠️ Erro de conexão com o servidor de telemetria: Verifique a URL.")
         return pd.DataFrame()
     
 def normalize_telemetry(df):
@@ -270,15 +275,15 @@ if app_mode == "📡 Live Telemetry":
     conn_mode = st.sidebar.selectbox("Fonte de Dados", ["Local (Pasta/CSV)", "Cloud (API Server)"])
     
     if conn_mode == "Cloud (API Server)":
-        server_ip = st.sidebar.text_input("IP/URL do Servidor", "spondylitic-junior-obedient.ngrok-free.dev")
+        # Já deixa o seu túnel padrão preenchido
+        server_ip = st.sidebar.text_input("URL Base do Servidor", "https://iracingcloud.loca.lt")
         session_id = st.sidebar.text_input("ID Sessão", "Daytona_Test")
         
-        # Limpeza inteligente da URL para NGROK
-        clean_host = server_ip.strip().replace("https://", "").replace("http://", "")
-        if "ngrok-free.dev" in clean_host:
-            CLOUD_URL = f"https://{clean_host}/session/{session_id}"
-        else:
-            CLOUD_URL = f"http://{clean_host}:8000/session/{session_id}"
+        # Limpeza simples: remove barras invertidas sobrando no final, se houver
+        base_url = server_ip.strip().rstrip('/')
+        
+        # Monta a URL perfeita sem forçar a porta 8000
+        CLOUD_URL = f"{base_url}/session/{session_id}"
         
         df_live = fetch_cloud_data(CLOUD_URL)
         is_cloud_active = True
