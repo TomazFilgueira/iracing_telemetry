@@ -22,7 +22,7 @@ start "iRacing Coletor" cmd /k "call "%CONDA_ACTIVATE_PATH%" %ENV_NAME% && pytho
 timeout /t 3 /nobreak >nul
 start "Dashboard" cmd /k "call "%CONDA_ACTIVATE_PATH%" %ENV_NAME% && streamlit run dashboard_cloud.py"
 timeout /t 4 /nobreak >nul
-start http://localhost:8501
+
 
 echo  ✅ Pronto! O dashboard abrira no navegador.
 echo.

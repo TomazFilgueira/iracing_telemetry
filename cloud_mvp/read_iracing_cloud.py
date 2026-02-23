@@ -189,7 +189,7 @@ try:
                 "Piloto", "UserID", "Volta", "Tempo",
                 "Media_3_Voltas", "Consumo_Volta",
                 "Media_Consumo_3_Voltas", "Combustivel_Restante",
-                "Pos_Geral", "Pos_Classe", "Voltas_Restantes_Estimadas"
+                "Pos_Geral", "Pos_Classe", "Voltas_Restantes_Estimadas", "state"
             ]).to_csv(CSV_PATH, index=False)
             file_initialized = True
             

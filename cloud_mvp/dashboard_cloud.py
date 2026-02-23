@@ -249,40 +249,64 @@ def render_metrics(df):
         df_valid['Media_Tooltip'] = df_valid['Media_3_Voltas'].apply(format_time)
 
         # FORÇAMOS A MESMA ESCALA PARA AS DUAS LINHAS
-        y_min, y_max = df_valid['Tempo'].min() - 0.5, df_valid['Tempo'].max() + 0.5
+        # Garantindo que o limite inferior não seja negativo
+        y_min = max(0, df_valid['Tempo'].min() - 1.0)
+        y_max = df_valid['Tempo'].max() + 1.0
         c_max = df_valid['Consumo_Volta'].max() + 0.5
         
         base = alt.Chart(df_valid).encode(x=alt.X('Volta:O', title='Nº da Volta'))
 
-        # Gráfico 1: Consistência (Formatado para mm:ss)
-        # labelExpr: Converte os segundos do eixo Y em mm:ss visualmente
-        time_axis = alt.Axis(
-            title='Tempo (mm:ss)',
-            labelExpr="floor(datum.value / 60) + ':' + (floor(datum.value % 60) < 10 ? '0' : '') + (datum.value % 60).toFixed(0)"
-        )
-
+        # Gráfico 1: Consistência (Eixo Y em Segundos, Tooltip em mm:ss)
         line = base.mark_line(point=True, opacity=0.4).encode(
-            y=alt.Y('Tempo:Q', scale=alt.Scale(domain=[y_min, y_max]), axis=time_axis),
+            y=alt.Y('Tempo:Q', scale=alt.Scale(domain=[y_min, y_max]), title='Tempo (s)'),
             tooltip=[alt.Tooltip('Volta:O'), alt.Tooltip('Tempo_Tooltip:N', title='Tempo')]
         )
         
-        avg_line = base.mark_line(color='#FFD700', strokeWidth=3).encode(
+        avg_line = base.mark_line(color='#FFD700', strokeWidth=3, point=True).encode(
             y=alt.Y('Media_3_Voltas:Q', scale=alt.Scale(domain=[y_min, y_max])),
             tooltip=[alt.Tooltip('Volta:O'), alt.Tooltip('Media_Tooltip:N', title='Média (3v)')]
         )
         
-        g1.altair_chart(alt.layer(line, avg_line).properties(title="Consistência de Ritmo", height=300), width='stretch')
+        # O resolve_scale(y='shared') é o segredo para as duas linhas não brigarem no mesmo gráfico
+        pace_chart = alt.layer(line, avg_line).resolve_scale(y='shared').properties(title="Consistência de Ritmo", height=300)
+        g1.altair_chart(pace_chart, width='stretch')
 
-        # Gráfico 2: Consumo (Mantido original)
+        # Gráfico 2: Consumo
         f_line = base.mark_line(point=True, color='#FF4B4B').encode(
             y=alt.Y('Consumo_Volta:Q', scale=alt.Scale(domain=[0, c_max]), title='Consumo (L)'),
             tooltip=['Volta:O', 'Consumo_Volta:Q']
         )
-        f_avg = base.mark_line(color='#FFD700', strokeWidth=3).encode(
+        f_avg = base.mark_line(color='#FFD700', strokeWidth=3, point=True).encode(
             y=alt.Y('Media_Consumo_3_Voltas:Q', scale=alt.Scale(domain=[0, c_max])),
             tooltip=['Volta:O', 'Media_Consumo_3_Voltas:Q']
         )
-        g2.altair_chart(alt.layer(f_line, f_avg).properties(title="Histórico de Consumo", height=300), width='stretch')
+        
+        fuel_chart = alt.layer(f_line, f_avg).resolve_scale(y='shared').properties(title="Histórico de Consumo", height=300)
+        g2.altair_chart(fuel_chart, width='stretch')
+
+        # ==========================================
+        # TABELA DE HISTÓRICO DE VOLTAS
+        # ==========================================
+        st.subheader("📋 Histórico Detalhado")
+        
+        # Seleciona apenas as colunas mais importantes para a tabela
+        df_table = df_valid[['Volta', 'Tempo', 'Media_3_Voltas', 'Consumo_Volta', 'Media_Consumo_3_Voltas', 'Combustivel_Restante']].copy()
+        
+        # Formata as colunas de tempo para ficar amigável (mm:ss) igual no topo da tela
+        df_table['Tempo'] = df_table['Tempo'].apply(format_time)
+        df_table['Media_3_Voltas'] = df_table['Media_3_Voltas'].apply(format_time)
+        
+        # Arredonda o consumo para 3 casas decimais para não poluir a tela
+        df_table['Consumo_Volta'] = df_table['Consumo_Volta'].round(3)
+        df_table['Media_Consumo_3_Voltas'] = df_table['Media_Consumo_3_Voltas'].round(3)
+        df_table['Combustivel_Restante'] = df_table['Combustivel_Restante'].round(2)
+        
+        # Ordena para a volta mais recente aparecer sempre no topo
+        df_table = df_table.sort_values('Volta', ascending=False)
+        
+        # Renderiza a tabela tela cheia e sem o índice (0, 1, 2...) do Pandas
+        st.dataframe(df_table, width='stretch', hide_index=True)
+
 # ==============================
 # EXECUÇÃO PRINCIPAL
 # ==============================
