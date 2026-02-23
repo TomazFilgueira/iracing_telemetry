@@ -1,0 +1,3 @@
+# Ignora arquivos de status e logs de telemetria locais
+status.json
+*.csv
