@@ -43,6 +43,6 @@ echo 📊 Iniciando Dashboard...
 start "Strategy Dashboard" cmd /k "call "%CONDA_ACTIVATE_PATH%" %ENV_NAME% && streamlit run dashboard_cloud.py"
 
 echo ✅ Tudo pronto! 
-echo 📌 Se usar LocalTunnel, a URL sera: https://estrategia-equipe-tomaz.loca.lt
-echo 📌 Compartilhe este link com Rodrigo e Morsinaldo.
+echo 📌 Se usar LocalTunnel, a URL sera: https://iracingcloud.loca.lt
+echo 📌 Compartilhe este link com sua equipe.
 pause
