@@ -9,7 +9,7 @@ from config import LOG_DIR, WINDOW_SIZE
 # ==============================
 # Configuração Cloud
 # ==============================
-SERVER_URL = "https://spondylitic-junior-obedient.ngrok-free.dev/telemetry" 
+SERVER_URL = "https://iracingcloud.loca.lt/telemetry"
 SESSION_ID = "Daytona_Test"
 
 # ==============================
@@ -40,8 +40,16 @@ def send_to_cloud(data):
             "timestamp": data["Timestamp"],
             "state": data["state"]
         }
-        # Timeout curto para não travar a telemetria
-        requests.post(SERVER_URL, json=cloud_payload, timeout=2.0)
+        
+        # --- NOVO: Cabeçalho para pular a tela de aviso do LocalTunnel ---
+        headers = {
+            "Bypass-Tunnel-Reminder": "true",
+            "User-Agent": "iRacingTelemetryClient/1.0"
+        }
+        
+        # Adicionamos 'headers=headers' na chamada
+        requests.post(SERVER_URL, json=cloud_payload, headers=headers, timeout=1.0)
+        
         return True
     except Exception as e:
         print(f"⚠️ Erro no Envio: {e}")
