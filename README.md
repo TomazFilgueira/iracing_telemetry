@@ -85,12 +85,12 @@ pip install -r requirements_local.txt
 
 The system operates in three distinct layers during a race event.
 
-### Layer 1: The Host (Central Server)
-The designated host (e.g., Tomaz) must start the central brain of the operation to receive data.
+### Layer 1: The Host (Central Server) - Install [Node.js](https://nodejs.org/en/download)
+The designated host (e.g. Race Engineer) must start the central brain of the operation to receive data.
 1. **Install LocalTunnel globally** (first time only): `npm install -g localtunnel`
 2. **Run the master batch file**: `server_anaconda_start.bat`
 3. This automatically launches the **FastAPI Server** and opens a **LocalTunnel** public URL.
-4. **Share the generated LocalTunnel URL** with the team (e.g., Rodrigo or Morsinaldo).
+4. **Share the generated LocalTunnel URL** with the team (e.g., Driver 1  or Driver 2).
 
 ### Layer 2: The Drivers (Telemetry Streaming)
 Any driver currently in the car must run the client script to broadcast their data.
