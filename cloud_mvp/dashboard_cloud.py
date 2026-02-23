@@ -256,7 +256,7 @@ def render_metrics(df):
         avg_line = base.mark_line(color='#FFD700', strokeWidth=3).encode(
             y=alt.Y('Media_3_Voltas:Q', scale=alt.Scale(domain=[y_min, y_max]))
         )
-        g1.altair_chart(alt.layer(line, avg_line).properties(title="Consistência de Ritmo", height=300), use_container_width=True)
+        g1.altair_chart(alt.layer(line, avg_line).properties(title="Consistência de Ritmo", height=300), width='stretch')
 
         # Gráfico 2: Consumo
         f_line = base.mark_line(point=True, color='#FF4B4B').encode(
@@ -265,7 +265,7 @@ def render_metrics(df):
         f_avg = base.mark_line(color='#FFD700', strokeWidth=3).encode(
             y=alt.Y('Media_Consumo_3_Voltas:Q', scale=alt.Scale(domain=[0, c_max]))
         )
-        g2.altair_chart(alt.layer(f_line, f_avg).properties(title="Histórico de Consumo", height=300), use_container_width=True)
+        g2.altair_chart(alt.layer(f_line, f_avg).properties(title="Histórico de Consumo", height=300), width='stretch')
         
 # ==============================
 # EXECUÇÃO PRINCIPAL
