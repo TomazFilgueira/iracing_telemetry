@@ -282,7 +282,7 @@ if app_mode == "📡 Live Telemetry":
     
     if conn_mode == "Cloud (API Server)":
         # Já deixa o seu túnel padrão preenchido
-        server_ip = st.sidebar.text_input("URL Base do Servidor", "https://iracingcloud.loca.lt")
+        server_ip = st.sidebar.text_input("URL Base do Servidor", "https://iracing-telemetry-vfak.onrender.com")
         session_id = st.sidebar.text_input("ID Sessão", "Daytona_Test")
         
         # Limpeza simples: remove barras invertidas sobrando no final, se houver
