@@ -7,7 +7,8 @@ import time
 import requests
 from pathlib import Path
 from config import LOG_DIR, REFRESH_RATE_ST
-from datetime import datetime 
+from datetime import datetime
+import pytz # Para lidar com fusos horários corretamente 
 
 # ==============================
 # Configuração da Página
@@ -116,10 +117,15 @@ def render_traffic_light(status_data, is_cloud=False, df=None):
                 driver = getattr(row, "Piloto", "Unknown")
                 timestamp_str = getattr(row, "Timestamp", "00:00:00")
                 
-                # Cálculo de latência para detectar se a internet do piloto caiu
+                # Cálculo de latência corrigido com Fuso Horário do Brasil - identificar se o piloto caiu
                 try:
                     last_ts = datetime.strptime(timestamp_str, "%H:%M:%S")
-                    now_ts = datetime.strptime(datetime.now().strftime("%H:%M:%S"), "%H:%M:%S")
+                    
+                    # Ensina o servidor da nuvem a usar o horário de Brasília
+                    fuso_br = pytz.timezone('America/Sao_Paulo')
+                    hora_atual_br = datetime.now(fuso_br).strftime("%H:%M:%S")
+                    now_ts = datetime.strptime(hora_atual_br, "%H:%M:%S")
+                    
                     diff = abs((now_ts - last_ts).total_seconds())
                 except:
                     diff = 0
