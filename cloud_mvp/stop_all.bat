@@ -1,6 +1,7 @@
 @echo off
 title Encerrar iRacing Telemetry
 color 0C
+chcp 65001 >nul
 
 echo.
 echo  =====================================================

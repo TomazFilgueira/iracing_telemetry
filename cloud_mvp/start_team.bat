@@ -1,6 +1,7 @@
 @echo off
 title iRacing Telemetry - Modo Equipe
 color 0E
+chcp 65001 >nul
 
 set CONDA_ACTIVATE_PATH=C:\Users\%USERNAME%\anaconda3\Scripts\activate.bat
 set ENV_NAME=ir_telemetry
@@ -16,8 +17,7 @@ echo  %DASHBOARD_URL%
 echo.
 
 if not exist "%CONDA_ACTIVATE_PATH%" (
-    echo  ❌ Anaconda nao encontrado. Chame o Tomaz.
-    pause
+    echo  ❌ Anaconda nao encontrado. Verifique o caminho em CONDA_ACTIVATE_PATH. Ou instale o pacote.
     exit
 )
 
