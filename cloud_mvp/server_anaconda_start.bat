@@ -21,9 +21,20 @@ start "FastAPI Server" cmd /k "call "%CONDA_ACTIVATE_PATH%" %ENV_NAME% && uvicor
 
 timeout /t 3
 
-:: Inicia o Túnel Ngrok
-echo 🌐 Iniciando Ngrok na porta 8000...
-start "Ngrok Tunnel" cmd /k "ngrok http 8000"
+:: ==========================================
+:: CONFIGURAÇÃO DE TÚNEL (NGROK vs LOCALTUNNEL)
+:: ==========================================
+
+:: Opção 1: Ngrok (COMENTADO)
+:: echo 🌐 Iniciando Ngrok na porta 8000...
+:: start "Ngrok Tunnel" cmd /k "ngrok http 8000"
+
+:: Opção 2: LocalTunnel (ATIVO)
+echo 🌐 Iniciando LocalTunnel na porta 8000...
+:: Altere 'estrategia-equipe-tomaz' para o nome que desejar para seu link fixo
+start "LocalTunnel" cmd /k "lt --port 8000 --subdomain estrategia-equipe-tomaz"
+
+:: ==========================================
 
 timeout /t 2
 
@@ -32,5 +43,6 @@ echo 📊 Iniciando Dashboard...
 start "Strategy Dashboard" cmd /k "call "%CONDA_ACTIVATE_PATH%" %ENV_NAME% && streamlit run dashboard_cloud.py"
 
 echo ✅ Tudo pronto! 
-echo 📌 Copie a URL (https://...) da janela do Ngrok e envie para a sua equipe
+echo 📌 Se usar LocalTunnel, a URL sera: https://estrategia-equipe-tomaz.loca.lt
+echo 📌 Compartilhe este link com Rodrigo e Morsinaldo.
 pause
