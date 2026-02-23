@@ -32,7 +32,7 @@ timeout /t 3
 :: Opção 2: LocalTunnel (ATIVO)
 echo 🌐 Iniciando LocalTunnel na porta 8000...
 :: Altere 'estrategia-equipe-tomaz' para o nome que desejar para seu link fixo
-start "LocalTunnel" cmd /k "lt --port 8000 --subdomain estrategia-equipe-tomaz"
+start "LocalTunnel" cmd /k "lt --port 8000 --subdomain iracingcloud"
 
 :: ==========================================
 
