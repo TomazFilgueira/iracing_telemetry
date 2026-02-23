@@ -232,7 +232,7 @@ def render_metrics(df):
     g1, g2 = st.columns(2)
     
     if not df_valid.empty:
-        # AQUI FORÇAMOS A MESMA ESCALA PARA AS DUAS LINHAS
+        # FORÇAMOS A MESMA ESCALA PARA AS DUAS LINHAS
         y_min, y_max = df_valid['Tempo'].min() - 0.5, df_valid['Tempo'].max() + 0.5
         c_max = df_valid['Consumo_Volta'].max() + 0.5
         
