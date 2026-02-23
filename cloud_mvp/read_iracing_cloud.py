@@ -9,7 +9,7 @@ from config import LOG_DIR, WINDOW_SIZE
 # ==============================
 # Configuração Cloud
 # ==============================
-SERVER_URL = "https://iracingcloud.loca.lt/telemetry"
+SERVER_URL = "https://iracing-telemetry-vfak.onrender.com/telemetry"
 SESSION_ID = "Daytona_Test"
 
 # ==============================
