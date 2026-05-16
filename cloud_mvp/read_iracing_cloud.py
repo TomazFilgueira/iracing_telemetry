@@ -10,7 +10,7 @@ from config import LOG_DIR, WINDOW_SIZE
 # Configuração Cloud
 # ==============================
 SERVER_URL = "https://iracing-telemetry-vfak.onrender.com/telemetry"
-SESSION_ID = "Daytona_Test"
+SESSION_ID = "teste2"
 
 # ==============================
 # Configuração Local
@@ -40,32 +40,21 @@ def send_to_cloud(data):
             "timestamp": data["Timestamp"],
             "state": data["state"]
         }
-        
-        # --- NOVO: Cabeçalho para pular a tela de aviso do LocalTunnel ---
         headers = {
             "Bypass-Tunnel-Reminder": "true",
             "User-Agent": "iRacingTelemetryClient/1.0"
         }
-        
-        # Adicionamos 'headers=headers' na chamada
         requests.post(SERVER_URL, json=cloud_payload, headers=headers, timeout=1.0)
-        
         return True
     except Exception as e:
         print(f"⚠️ Erro no Envio: {e}")
         return False
 
-# Variável global para controlar a frequência do Heartbeat
+
 last_heartbeat_time = 0
 
 def update_status_and_heartbeat(state, driver, track, fuel_current, pos_g):
-    """
-    Atualiza status local e envia Heartbeat para manter o sinal verde na nuvem.
-    CORREÇÃO: Envia o combustível REAL, não zero.
-    """
     global last_heartbeat_time
-    
-    # 1. Atualização Local (Status.json)
     status_data = {
         "state": state,
         "driver": driver,
@@ -74,27 +63,28 @@ def update_status_and_heartbeat(state, driver, track, fuel_current, pos_g):
     }
     with open(STATUS_PATH, "w") as f:
         json.dump(status_data, f)
-    
-    # 2. Heartbeat Cloud (Apenas a cada 2 segundos para não sujar o log)
+
     if state != "offline" and (time.time() - last_heartbeat_time) > 2.0:
         heartbeat = {
-            "Piloto": driver, 
-            "UserID": -1, 
-            "Volta": 0, 
-            "Tempo": 0.0, # Mantemos 0.0 para o Dashboard filtrar fora dos gráficos
-            "Combustivel_Restante": float(fuel_current), # <--- CORREÇÃO: Envia valor real
-            "Pos_Geral": pos_g, 
-            "Timestamp": time.strftime("%H:%M:%S"), 
+            "Piloto": driver,
+            "UserID": -1,
+            "Volta": 0,
+            "Tempo": 0.0,
+            "Combustivel_Restante": float(fuel_current),
+            "Pos_Geral": pos_g,
+            "Timestamp": time.strftime("%H:%M:%S"),
             "state": state
         }
         send_to_cloud(heartbeat)
         last_heartbeat_time = time.time()
+
 
 def get_session_type(session_num):
     try:
         return ir['SessionInfo']['Sessions'][session_num]['SessionType']
     except:
         return "Sessão"
+
 
 # ==============================
 # Posição robusta
@@ -115,6 +105,7 @@ def get_valid_position():
     except:
         return last_valid_pos_g, last_valid_pos_c
 
+
 # ==============================
 # Controle Principal
 # ==============================
@@ -122,7 +113,13 @@ last_session_num = -1
 last_recorded_lap_time = -1.0
 fuel_at_lap_start = -1.0
 file_initialized = False
-grid_recorded = False # <--- Recuperado da versão Local
+grid_recorded = False
+
+# FIX 1: Grace period para is_driving
+# Garante que a in-lap (entrada no pit cruzando a linha) ainda seja registrada
+# mesmo que is_driving vire False logo após o cruzamento.
+last_on_track_time = 0.0
+DRIVING_GRACE_SECONDS = 10.0
 
 laps_window = deque(maxlen=WINDOW_SIZE)
 fuel_window = deque(maxlen=WINDOW_SIZE)
@@ -133,7 +130,6 @@ try:
     while True:
         if not ir.is_connected:
             ir.startup()
-            # Passamos 0.0 de combustivel apenas quando offline
             update_status_and_heartbeat("offline", "---", "---", 0.0, 0)
             file_initialized = False
             time.sleep(1)
@@ -145,10 +141,10 @@ try:
             time.sleep(0.5)
             continue
 
-        # ===== DADOS ATUAIS (Importante pegar antes de tudo) =====
+        # ===== DADOS ATUAIS =====
         fuel_now = ir['FuelLevel']
         pos_g, pos_c = get_valid_position()
-        
+
         try:
             driver_data = ir['DriverInfo']['Drivers'][car_idx]
             current_driver = driver_data.get('UserName', 'Unknown')
@@ -160,17 +156,15 @@ try:
         session_num = ir['SessionNum']
         session_name = get_session_type(session_num)
         track_name = ir['WeekendInfo']['TrackDisplayName']
-        
-       
-        
-        
-        
-        # --- VERIFICAÇÃO DE CONTROLE FÍSICO ---
-        is_driving = ir['IsOnTrack'] 
-        
-        #current_state = "cockpit" if ir['SessionState'] > 3 else "connected"
-        
-        # Define Estado com base no is_driving
+        is_driving = ir['IsOnTrack']
+
+        # FIX 1: Atualiza o timestamp da última vez que estava no carro
+        if is_driving:
+            last_on_track_time = time.time()
+
+        # Grace period: considera "recentemente no carro" por DRIVING_GRACE_SECONDS
+        recently_driving = (time.time() - last_on_track_time) < DRIVING_GRACE_SECONDS
+
         current_state = "cockpit" if is_driving else "connected"
         update_status_and_heartbeat(current_state, current_driver, track_name, fuel_now, pos_g)
 
@@ -179,6 +173,8 @@ try:
             fuel_window.clear()
             grid_recorded = False
             last_recorded_lap_time = -1.0
+            fuel_at_lap_start = -1.0
+            last_on_track_time = 0.0
             last_session_num = session_num
             print(f"🔄 Nova Sessão Detectada: {session_name}")
 
@@ -189,13 +185,13 @@ try:
                 "Piloto", "UserID", "Volta", "Tempo",
                 "Media_3_Voltas", "Consumo_Volta",
                 "Media_Consumo_3_Voltas", "Combustivel_Restante",
+                "Combustivel_no_Inicio_Volta",  # NOVO: tanque no início da volta
                 "Pos_Geral", "Pos_Classe", "Voltas_Restantes_Estimadas", "state"
             ]).to_csv(CSV_PATH, index=False)
             file_initialized = True
-            
-        # ===== GRID (Lógica recuperada do script local) =====
-        # Garante que temos um ponto de partida de combustível
-        if (not grid_recorded and ir['SessionState'] == 4 and fuel_now > 0.5):
+
+        # ===== GRID =====
+        if not grid_recorded and ir['SessionState'] == 4 and fuel_now > 0.5:
             fuel_at_lap_start = fuel_now
             grid_recorded = True
             print(f"🟢 [GRID] {current_driver} alinhado com {fuel_now:.2f}L")
@@ -203,26 +199,35 @@ try:
         # ===== DETECÇÃO DE VOLTA =====
         lap_last_time = ir['LapLastLapTime']
 
-        # --- AQUI: Só processa e envia a volta se is_driving for True ---
-        if lap_last_time > 0 and lap_last_time != last_recorded_lap_time and is_driving:
+        # FIX 1: Usa grace period em vez de is_driving puro.
+        # Isso evita perder a in-lap quando is_driving vira False no cruzamento da linha do pit.
+        if lap_last_time > 0 and lap_last_time != last_recorded_lap_time and recently_driving:
+
+            # FIX 2: Captura o combustível ANTES do sleep para ter o valor pré-reabastecimento.
+            # O sleep(1.5) pode ocorrer durante o refuel, corrompendo fuel_at_lap_start.
+            fuel_before_sleep = ir['FuelLevel']
 
             time.sleep(1.5)  # Consolidação leve
 
-            # --- ESTRATÉGIA DE EQUIPE: CONTAGEM GLOBAL ---
-            # CarIdxLap pega a volta do carro no servidor, independente de quem pilota
-            current_car_lap = ir['CarIdxLap'][car_idx]-1.0  # Ajuste para refletir a volta completa anterior, já que o iRacing atualiza no início da nova volta
+            # ===== ESTRATÉGIA DE EQUIPE: CONTAGEM GLOBAL =====
+            current_car_lap = ir['CarIdxLap'][car_idx] - 1.0
 
-            # Revalida dados após consolidação
             driver_data = ir['DriverInfo']['Drivers'][car_idx]
             current_driver = driver_data.get('UserName', 'Unknown')
-            fuel_now = ir['FuelLevel']
+            fuel_now = ir['FuelLevel']  # Valor pós-sleep (pode ser durante/pós-refuel)
             pos_g, pos_c = get_valid_position()
+
+            # FIX 2: Inicialização de fuel_at_lap_start na primeira volta
+            # (quando o grid não foi capturado, ex: driver entrou na sessão tarde)
+            if fuel_at_lap_start < 0 and fuel_before_sleep > 0.5:
+                fuel_at_lap_start = fuel_before_sleep
+                print(f"⛽ [INIT] fuel_at_lap_start inicializado: {fuel_before_sleep:.2f}L")
 
             # Tempo médio das últimas voltas
             laps_window.append(lap_last_time)
             avg_lap_time = sum(laps_window) / len(laps_window)
 
-            # Voltas Estimadas (Mantido sua lógica original)
+            # Voltas Estimadas
             session_laps_remain = ir['SessionLapsRemain']
             session_time_remain = ir['SessionTimeRemain']
             if session_laps_remain > 0 and session_laps_remain < 10000:
@@ -230,16 +235,33 @@ try:
             elif avg_lap_time > 0 and session_time_remain > 0:
                 voltas_estimadas = round(session_time_remain / avg_lap_time, 1)
             else:
-                voltas_estimadas = 0            
+                voltas_estimadas = 0
 
-            # --- PROTEÇÃO DRIVER SWAP (Rodrigo) ---
-            # Se fuel_now for 0, o Rodrigo está pilotando e o dado local é inválido
-            if fuel_now > 0.1 and fuel_at_lap_start > fuel_now:
-                consumo = max(0.0, fuel_at_lap_start - fuel_now)
+            # FIX 3: Cálculo de consumo com detecção de reabastecimento.
+            #
+            # Problema original: sleep(1.5) capturava fuel_now durante o refuel
+            # (ex: 40L de 60L), fuel_at_lap_start ficava com 40L.
+            # Na próxima volta fuel_now=57L > 40L → consumo=0. Duas voltas zeradas.
+            #
+            # Solução: usa fuel_before_sleep (capturado antes do sleep, sem refuel)
+            # para calcular o consumo real da volta. Detecta refuel pela diferença
+            # entre fuel_now (pós-sleep) e fuel_before_sleep.
+            #
+            REFUEL_THRESHOLD = 2.0  # Litros: delta acima disso = reabastecimento
+
+            refuel_happened = (fuel_now - fuel_before_sleep) > REFUEL_THRESHOLD
+            consumo_reference = fuel_before_sleep  # Referência limpa pré-refuel
+
+            if refuel_happened:
+                print(f"⛽ [REFUEL] Reabastecimento: {fuel_at_lap_start:.1f}L → {fuel_before_sleep:.1f}L → {fuel_now:.1f}L")
+
+            if fuel_at_lap_start > 0.1 and fuel_at_lap_start > consumo_reference:
+                consumo = max(0.0, fuel_at_lap_start - consumo_reference)
                 if 0 < consumo < 20:
                     fuel_window.append(consumo)
             else:
-                consumo = 0.0 # Evita picos de 40L no CSV
+                # Sem referência válida ou refuel detectado sem consumo calculável
+                consumo = 0.0
 
             avg_fuel = sum(fuel_window) / len(fuel_window) if fuel_window else consumo
 
@@ -247,25 +269,29 @@ try:
                 "Timestamp": time.strftime("%H:%M:%S"),
                 "Sessao": session_name, "Pista": track_name,
                 "Equipe": team_name, "Piloto": current_driver,
-                "UserID": current_user_id, "Volta": current_car_lap,  # Volta completa é a anterior
-                "Tempo": round(lap_last_time, 3), "Media_3_Voltas": round(avg_lap_time, 3),
-                "Consumo_Volta": round(consumo, 3), "Media_Consumo_3_Voltas": round(avg_fuel, 3),
+                "UserID": current_user_id, "Volta": current_car_lap,
+                "Tempo": round(lap_last_time, 3),
+                "Media_3_Voltas": round(avg_lap_time, 3),
+                "Consumo_Volta": round(consumo, 3),
+                "Media_Consumo_3_Voltas": round(avg_fuel, 3),
                 "Combustivel_Restante": round(fuel_now, 3),
+                "Combustivel_no_Inicio_Volta": round(fuel_at_lap_start, 3),  # NOVO
                 "Pos_Geral": pos_g, "Pos_Classe": pos_c,
                 "Voltas_Restantes_Estimadas": voltas_estimadas,
-                "state": current_state 
+                "state": current_state
             }
 
             # 1. Salva Local
             pd.DataFrame([data]).to_csv(CSV_PATH, mode='a', index=False, header=False)
-            
+
             # 2. Envia para Nuvem
             success = send_to_cloud(data)
             status_cloud = "✅ Cloud OK" if success else "❌ Cloud Fail"
-
-            print(f"🏁 Volta {current_car_lap} | {current_driver} | {lap_last_time:.3f}s | {status_cloud}")
+            refuel_tag = " | ⛽ REFUEL" if refuel_happened else ""
+            print(f"🏁 Volta {current_car_lap} | {current_driver} | {lap_last_time:.3f}s | Consumo: {consumo:.3f}L{refuel_tag} | {status_cloud}")
 
             last_recorded_lap_time = lap_last_time
+            # FIX 3: Sempre atualiza com fuel_now (pós-refuel se houve)
             fuel_at_lap_start = fuel_now
 
         time.sleep(0.5)
