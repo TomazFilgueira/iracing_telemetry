@@ -30,6 +30,13 @@ def init_db():
             state         TEXT
         )
     ''')
+    # Migração automática: adiciona class_position se o banco já existia sem ela.
+    # Necessário para ambientes sem acesso ao shell (ex: Render free tier).
+    existing_cols = [
+        row[1] for row in db.execute('PRAGMA table_info(telemetry)').fetchall()
+    ]
+    if 'class_position' not in existing_cols:
+        db.execute('ALTER TABLE telemetry ADD COLUMN class_position INTEGER DEFAULT 0')
     db.commit()
 
 # ─── Modelo de dados ────────────────────────────────────
