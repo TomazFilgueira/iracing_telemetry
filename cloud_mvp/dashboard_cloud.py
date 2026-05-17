@@ -60,7 +60,8 @@ def fetch_cloud_data(url):
                 "lap_time":       "Tempo",
                 "fuel":           "Combustivel_Restante",
                 "position":       "Pos_Geral",
-                "class_position": "Pos_Classe",   # FIX #8: multiclass
+                "class_position": "Pos_Classe",
+                "session_type":   "Sessao",    # FIX: Practice/Qualify/Race real
                 "timestamp":      "Timestamp",
                 "state":          "state"
             }

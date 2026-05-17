@@ -17,17 +17,18 @@ def init_db():
     db = get_db()
     db.execute('''
         CREATE TABLE IF NOT EXISTS telemetry (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id    TEXT,
-            driver        TEXT,
-            user_id       INTEGER,
-            lap           INTEGER,
-            lap_time      REAL,
-            fuel          REAL,
-            position      INTEGER,
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id     TEXT,
+            driver         TEXT,
+            user_id        INTEGER,
+            lap            INTEGER,
+            lap_time       REAL,
+            fuel           REAL,
+            position       INTEGER,
             class_position INTEGER DEFAULT 0,
-            timestamp     TEXT,
-            state         TEXT
+            session_type   TEXT    DEFAULT 'Race',
+            timestamp      TEXT,
+            state          TEXT
         )
     ''')
     # Migração automática: adiciona class_position se o banco já existia sem ela.
@@ -37,6 +38,8 @@ def init_db():
     ]
     if 'class_position' not in existing_cols:
         db.execute('ALTER TABLE telemetry ADD COLUMN class_position INTEGER DEFAULT 0')
+    if 'session_type' not in existing_cols:
+        db.execute("ALTER TABLE telemetry ADD COLUMN session_type TEXT DEFAULT 'Race'")
     db.commit()
 
 # ─── Modelo de dados ────────────────────────────────────
@@ -48,7 +51,8 @@ class TelemetryData(BaseModel):
     lap_time:       float
     fuel:           float
     position:       int
-    class_position: int = 0   # campo novo; default 0 mantém compatibilidade com clientes antigos
+    class_position: int = 0
+    session_type:   str = 'Race'   # FIX: Practice / Qualify / Race
     timestamp:      str
     state:          str
 
@@ -57,10 +61,10 @@ class TelemetryData(BaseModel):
 def receive_telemetry(data: TelemetryData):
     db = get_db()
     db.execute(
-        'INSERT INTO telemetry VALUES (NULL,?,?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO telemetry VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?)',
         (data.session_id, data.driver, data.user_id, data.lap,
          data.lap_time, data.fuel, data.position, data.class_position,
-         data.timestamp, data.state)
+         data.session_type, data.timestamp, data.state)
     )
     db.commit()
     return {'status': 'ok'}

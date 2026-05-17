@@ -73,7 +73,8 @@ def send_to_cloud(data):
             "lap_time":       data["Tempo"],
             "fuel":           data["Combustivel_Restante"],
             "position":       data["Pos_Geral"],
-            "class_position": data["Pos_Classe"],   # FIX #8: multiclass
+            "class_position": data["Pos_Classe"],
+            "session_type":   data["Sessao"],        # FIX: envia Practice/Race/Qualify
             "timestamp":      data["Timestamp"],
             "state":          data["state"]
         }
@@ -90,7 +91,7 @@ def send_to_cloud(data):
 
 last_heartbeat_time = 0
 
-def update_status_and_heartbeat(state, driver, track, fuel_current, pos_g, pos_c=0):
+def update_status_and_heartbeat(state, driver, track, fuel_current, pos_g, pos_c=0, session_name=""):
     global last_heartbeat_time
     status_data = {
         "state": state,
@@ -109,7 +110,8 @@ def update_status_and_heartbeat(state, driver, track, fuel_current, pos_g, pos_c
             "Tempo":                0.0,
             "Combustivel_Restante": float(fuel_current),
             "Pos_Geral":            pos_g,
-            "Pos_Classe":           pos_c,   # FIX #8
+            "Pos_Classe":           pos_c,
+            "Sessao":               session_name,   # FIX: sessão no heartbeat
             "Timestamp":            time.strftime("%H:%M:%S"),
             "state":                state
         }
@@ -201,7 +203,7 @@ try:
         recently_driving = (time.time() - last_on_track_time) < DRIVING_GRACE_SECONDS
 
         current_state = "cockpit" if is_driving else "connected"
-        update_status_and_heartbeat(current_state, current_driver, track_name, fuel_now, pos_g, pos_c)
+        update_status_and_heartbeat(current_state, current_driver, track_name, fuel_now, pos_g, pos_c, session_name)
 
         if session_num != last_session_num:
             laps_window.clear()
