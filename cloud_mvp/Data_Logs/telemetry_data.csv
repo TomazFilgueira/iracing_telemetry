@@ -1,0 +1,18 @@
+Timestamp,Sessao,Pista,Equipe,Piloto,UserID,Volta,Tempo,Media_3_Voltas,Consumo_Volta,Media_Consumo_3_Voltas,Combustivel_Restante,Pos_Geral,Pos_Classe,Voltas_Restantes_Estimadas
+19:08:01,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,1.0,54.024,54.024,0.0,0.0,0.0,1,1,21.2
+19:08:49,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,2.0,47.373,50.698,0.0,0.0,0.0,1,1,21.6
+19:09:35,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,3.0,47.438,49.612,0.0,0.0,0.0,1,1,21.1
+19:10:23,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,4.0,47.278,47.363,0.0,0.0,0.0,1,1,21.1
+19:11:10,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,5.0,47.336,47.351,0.0,0.0,0.0,1,1,20.2
+19:11:58,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,6.0,47.289,47.301,0.0,0.0,0.0,1,1,19.2
+19:12:44,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,7.0,47.377,47.334,0.0,0.0,0.0,1,1,18.2
+19:13:32,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,8.0,47.308,47.325,0.0,0.0,0.0,1,1,17.2
+19:14:27,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,9.0,55.496,50.06,0.0,0.0,0.0,1,1,15.1
+19:18:19,Race,Daytona International Speedway,Car-Kará Team,Tomaz Nunes,1233784,11.0,70.16,57.655,0.0,0.0,31.496,1,1,9.1
+19:19:10,Race,Daytona International Speedway,Car-Kará Team,Tomaz Nunes,1233784,12.0,50.167,58.608,1.904,1.904,29.592,1,1,8.1
+19:20:10,Race,Daytona International Speedway,Car-Kará Team,Tomaz Nunes,1233784,13.0,60.209,60.178,1.977,1.94,27.615,1,1,6.9
+19:23:01,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,15.0,47.427,52.601,0.0,1.94,0.0,1,1,4.6
+19:23:56,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,16.0,55.7,54.445,0.0,1.94,0.0,1,1,3.4
+19:25:11,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,17.0,73.374,58.834,0.0,1.94,0.0,1,1,1.9
+19:26:05,Race,Daytona International Speedway,Car-Kará Team,Rodrigo Lima,739024,18.0,54.893,61.322,0.0,1.94,0.0,1,1,1.0
+19:28:35,Race,Daytona International Speedway,Car-Kará Team,Tomaz Nunes,1233784,20.0,47.682,58.65,0.0,1.94,22.321,1,1,46.0
