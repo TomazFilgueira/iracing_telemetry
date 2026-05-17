@@ -307,13 +307,24 @@ def render_metrics(df):
     tank_col   = 'Combustivel_no_Inicio_Volta' if 'Combustivel_no_Inicio_Volta' in df_valid.columns else 'Combustivel_Restante'
     tank_label = 'Combustível no início da volta (L)' if tank_col == 'Combustivel_no_Inicio_Volta' else 'Combustível restante (L)'
 
-    df_tank    = df_valid[['Volta', tank_col]].copy().reset_index(drop=True)
-    tank_max   = float(df_tank[tank_col].max()) + 2.0
-    first_fuel = float(df_tank[tank_col].iloc[0])
+    df_tank  = df_valid[['Volta', tank_col]].copy().reset_index(drop=True)
+    tank_max = float(df_tank[tank_col].max()) + 2.0
 
-    # Projeção usa cons_for_autonomia (= lógica iRacing) para consistência com a métrica
+    # FIX PROJEÇÃO: reconstrói stint-a-stint para respeitar reabastecimentos.
+    # Detecta início de novo stint quando combustível SOBE mais de 1L (refuel).
+    # Dentro de cada bloco projeta linearmente a partir do pico daquele bloco.
     if cons_for_autonomia > 0:
-        df_tank['Projecao'] = [max(0.0, first_fuel - cons_for_autonomia * i) for i in range(len(df_tank))]
+        projecao = []
+        stint_start_idx = 0
+        values = df_tank[tank_col].tolist()
+        for i in range(len(values)):
+            # Reabastecimento: valor atual > anterior + 1L → reseta âncora
+            if i > 0 and values[i] > values[i - 1] + 1.0:
+                stint_start_idx = i
+            laps_into_stint = i - stint_start_idx
+            proj_val = max(0.0, values[stint_start_idx] - cons_for_autonomia * laps_into_stint)
+            projecao.append(proj_val)
+        df_tank['Projecao'] = projecao
 
     base_t    = alt.Chart(df_tank).encode(x=alt.X('Volta:O', title='Nº da Volta'))
     tank_real = base_t.mark_line(point=True, color='#00BFFF', strokeWidth=2).encode(
