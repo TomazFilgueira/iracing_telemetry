@@ -55,9 +55,14 @@ def fetch_cloud_data(url):
             if not data: return pd.DataFrame()
             df = pd.DataFrame(data)
             mapping = {
-                "driver": "Piloto", "lap": "Volta", "lap_time": "Tempo",
-                "fuel": "Combustivel_Restante", "position": "Pos_Geral",
-                "timestamp": "Timestamp", "state": "state"
+                "driver":         "Piloto",
+                "lap":            "Volta",
+                "lap_time":       "Tempo",
+                "fuel":           "Combustivel_Restante",
+                "position":       "Pos_Geral",
+                "class_position": "Pos_Classe",   # FIX #8: multiclass
+                "timestamp":      "Timestamp",
+                "state":          "state"
             }
             df = df.rename(columns={k: v for k, v in mapping.items() if k in df.columns})
             if "Sessao" not in df.columns: df["Sessao"] = "Race"
@@ -75,8 +80,14 @@ def normalize_telemetry(df):
     }
     df = df.rename(columns={k: v for k, v in mapping.items() if k in df.columns})
     if 'Sessao' not in df.columns: df['Sessao'] = 'Race'
-    if 'Piloto' not in df.columns: df['Piloto'] = 'Desconhecido'
-    if 'Pos_Classe' not in df.columns: df['Pos_Classe'] = df['Pos_Geral'] if 'Pos_Geral' in df.columns else 0
+    if 'Piloto' not in df.columns:
+        df['Piloto'] = 'Desconhecido'
+    else:
+        # FIX #1: normaliza espaços para evitar mismatch no filtro por piloto
+        df['Piloto'] = df['Piloto'].astype(str).str.strip()
+    # FIX #8: só faz fallback de Pos_Classe → Pos_Geral se a coluna não veio da nuvem
+    if 'Pos_Classe' not in df.columns:
+        df['Pos_Classe'] = df['Pos_Geral'] if 'Pos_Geral' in df.columns else 0
     if 'Media_3_Voltas' not in df.columns and 'Tempo' in df.columns:
         df['Media_3_Voltas'] = df['Tempo'].rolling(3).mean().fillna(df['Tempo'])
     if 'Consumo_Volta' not in df.columns and 'Combustivel_Restante' in df.columns:
@@ -159,14 +170,20 @@ def render_metrics(df):
     # ── Filtragem base ─────────────────────────────────────────────────────────
     df_session = df[df['Sessao'] == session_selected].copy()
 
-    # Contador de stint: usa APENAS voltas reais (Tempo > 0).
-    # Heartbeats (Tempo=0) oscilam combustível e criam falsos stint_change.
+    # FIX #4 STINT: ordena cronologicamente ANTES do shift() para garantir que
+    # a comparação entre linhas respeite a ordem real das voltas.
+    # .fillna(True) marca a primeira linha sempre como início de stint.
     df_session_laps = df_session[df_session['Tempo'] > 0].copy()
     if not df_session_laps.empty:
+        df_session_laps = (
+            df_session_laps
+            .sort_values(['Volta', 'Timestamp'])
+            .reset_index(drop=True)
+        )
         df_session_laps['stint_change'] = (
             (df_session_laps['Piloto'] != df_session_laps['Piloto'].shift()) |
             (df_session_laps['Combustivel_Restante'] > df_session_laps['Combustivel_Restante'].shift() + 1.0)
-        )
+        ).fillna(True)
         df_session_laps['global_stint_id'] = df_session_laps['stint_change'].cumsum()
 
     df_p = df_session[df_session['Piloto'] == piloto_selected].copy()
@@ -174,18 +191,22 @@ def render_metrics(df):
         st.warning("Sem dados para este piloto.")
         return
 
-    # Stint atual: conta voltas na última sequência do piloto
-    df_p_laps = df_session_laps[df_session_laps['Piloto'] == piloto_selected] if not df_session_laps.empty else pd.DataFrame()
+    # FIX #4: conta voltas apenas no último stint contínuo do piloto selecionado
+    df_p_laps = (
+        df_session_laps[df_session_laps['Piloto'] == piloto_selected]
+        if not df_session_laps.empty
+        else pd.DataFrame()
+    )
     if not df_p_laps.empty:
         last_stint_id = df_p_laps['global_stint_id'].iloc[-1]
-        stint_laps = len(df_p_laps[df_p_laps['global_stint_id'] == last_stint_id])
+        stint_laps = int((df_p_laps['global_stint_id'] == last_stint_id).sum())
     else:
         stint_laps = 0
 
-    # Voltas válidas (sem heartbeats)
+    # Voltas válidas — df_valid é EXCLUSIVO do piloto selecionado (FIX #1)
     df_valid = df_p[df_p['Tempo'] > 0].copy().sort_values('Volta').reset_index(drop=True)
 
-    # Recalcula métricas apenas nas voltas reais
+    # Recalcula métricas isoladas do piloto (sem contaminação de rolling entre pilotos)
     if not df_valid.empty:
         df_valid['Media_3_Voltas'] = df_valid['Tempo'].rolling(3).mean().fillna(df_valid['Tempo'])
         df_valid['Consumo_Volta'] = df_valid['Combustivel_Restante'].shift(1) - df_valid['Combustivel_Restante']
@@ -194,10 +215,23 @@ def render_metrics(df):
 
     last_row = df_p.iloc[-1]
     avg_cons_3v = float(df_valid.iloc[-1]['Media_Consumo_3_Voltas']) if not df_valid.empty else 0
+    # FIX #7: usa consumo da última volta (= lógica do iRacing), fallback para média 3v
+    last_cons   = float(df_valid.iloc[-1]['Consumo_Volta'])         if not df_valid.empty else 0
     fuel_remaining = float(last_row['Combustivel_Restante'])
-    fuel_laps_est = fuel_remaining / avg_cons_3v if avg_cons_3v > 0 else 0
+    cons_for_autonomia = last_cons if last_cons > 0 else avg_cons_3v
+    fuel_laps_est = fuel_remaining / cons_for_autonomia if cons_for_autonomia > 0 else 0
 
-    # Voltas totais = max volta das voltas reais da sessão (ignora heartbeats com Volta=0)
+    # FIX #2: congela Autonomia Estimada entre recarregamentos;
+    # só atualiza quando uma nova volta é fechada.
+    _ak  = f"autonomia_{piloto_selected}_{session_selected}"
+    _alk = f"autonomia_lap_{piloto_selected}_{session_selected}"
+    if not df_valid.empty:
+        current_last_lap = int(df_valid.iloc[-1]['Volta'])
+        if st.session_state.get(_alk) != current_last_lap:
+            st.session_state[_ak]  = fuel_laps_est
+            st.session_state[_alk] = current_last_lap
+    fuel_laps_display = st.session_state.get(_ak, fuel_laps_est)
+
     total_session_laps = int(df_session_laps['Volta'].max()) if not df_session_laps.empty else 0
 
     # ── Métricas da equipe ─────────────────────────────────────────────────────
@@ -212,12 +246,13 @@ def render_metrics(df):
     col_p1, col_p2, col_p3 = st.columns(3)
     col_p1.metric("Voltas Piloto",      len(df_valid))
     col_p2.metric("Stint Atual",        f"{stint_laps} v")
-    col_p3.metric("Consumo Médio (3v)", f"{avg_cons_3v:.3f} L")
+    col_p3.metric("Consumo Médio (3v)", f"{avg_cons_3v:.2f} L")   # FIX #3: 2dp
 
     col_p4, col_p5, col_p6 = st.columns(3)
     col_p4.metric("Última Volta",       format_time(float(df_valid.iloc[-1]['Tempo'])) if not df_valid.empty else "---")
+    # FIX #1: df_valid já é filtrado por piloto_selected — Tempo.min() = melhor DESTE piloto
     col_p5.metric("Melhor Volta",       format_time(float(df_valid['Tempo'].min()))    if not df_valid.empty else "---")
-    col_p6.metric("Autonomia Estimada", f"{fuel_laps_est:.1f} v")
+    col_p6.metric("Autonomia Estimada", f"{fuel_laps_display:.1f} v")  # FIX #2 + #7
 
     if df_valid.empty:
         st.info("Aguardando voltas válidas...")
@@ -251,14 +286,14 @@ def render_metrics(df):
         use_container_width=True
     )
 
-    # Gráfico 2: Histórico de Consumo
+    # Gráfico 2: Histórico de Consumo — FIX #3: tooltips 2dp
     f_line = base.mark_line(point=True, color='#FF4B4B').encode(
         y=alt.Y('Consumo_Volta:Q', scale=alt.Scale(domain=[0, c_max]), title='Consumo (L)'),
-        tooltip=['Volta:O', 'Consumo_Volta:Q']
+        tooltip=[alt.Tooltip('Volta:O'), alt.Tooltip('Consumo_Volta:Q', format='.2f')]
     )
     f_avg  = base.mark_line(color='#FFD700', strokeWidth=3, point=True).encode(
         y=alt.Y('Media_Consumo_3_Voltas:Q', scale=alt.Scale(domain=[0, c_max])),
-        tooltip=['Volta:O', 'Media_Consumo_3_Voltas:Q']
+        tooltip=[alt.Tooltip('Volta:O'), alt.Tooltip('Media_Consumo_3_Voltas:Q', format='.2f')]
     )
     g2.altair_chart(
         alt.layer(f_line, f_avg).resolve_scale(y='shared').properties(title="Histórico de Consumo", height=300),
@@ -266,18 +301,18 @@ def render_metrics(df):
     )
 
     # ── Gráfico 3: Volume do Tanque ────────────────────────────────────────────
-    # DataFrame 100% limpo, sem nenhuma coluna extra de tooltip.
     st.subheader("⛽ Volume do Tanque por Volta")
 
     tank_col   = 'Combustivel_no_Inicio_Volta' if 'Combustivel_no_Inicio_Volta' in df_valid.columns else 'Combustivel_Restante'
     tank_label = 'Combustível no início da volta (L)' if tank_col == 'Combustivel_no_Inicio_Volta' else 'Combustível restante (L)'
 
-    df_tank        = df_valid[['Volta', tank_col]].copy().reset_index(drop=True)
-    tank_max       = float(df_tank[tank_col].max()) + 2.0
-    first_fuel     = float(df_tank[tank_col].iloc[0])
+    df_tank    = df_valid[['Volta', tank_col]].copy().reset_index(drop=True)
+    tank_max   = float(df_tank[tank_col].max()) + 2.0
+    first_fuel = float(df_tank[tank_col].iloc[0])
 
-    if avg_cons_3v > 0:
-        df_tank['Projecao'] = [max(0.0, first_fuel - avg_cons_3v * i) for i in range(len(df_tank))]
+    # Projeção usa cons_for_autonomia (= lógica iRacing) para consistência com a métrica
+    if cons_for_autonomia > 0:
+        df_tank['Projecao'] = [max(0.0, first_fuel - cons_for_autonomia * i) for i in range(len(df_tank))]
 
     base_t    = alt.Chart(df_tank).encode(x=alt.X('Volta:O', title='Nº da Volta'))
     tank_real = base_t.mark_line(point=True, color='#00BFFF', strokeWidth=2).encode(
@@ -306,10 +341,10 @@ def render_metrics(df):
         table_cols.insert(-1, 'Combustivel_no_Inicio_Volta')
 
     df_table = df_valid[table_cols].copy()
-    df_table['Tempo']                = df_table['Tempo'].apply(format_time)
-    df_table['Media_3_Voltas']       = df_table['Media_3_Voltas'].apply(format_time)
-    df_table['Consumo_Volta']        = df_table['Consumo_Volta'].round(3)
-    df_table['Media_Consumo_3_Voltas'] = df_table['Media_Consumo_3_Voltas'].round(3)
+    df_table['Tempo']              = df_table['Tempo'].apply(format_time)
+    df_table['Media_3_Voltas']     = df_table['Media_3_Voltas'].apply(format_time)
+    df_table['Consumo_Volta']      = df_table['Consumo_Volta'].round(2)          # FIX #3
+    df_table['Media_Consumo_3_Voltas'] = df_table['Media_Consumo_3_Voltas'].round(2)  # FIX #3
     df_table['Combustivel_Restante'] = df_table['Combustivel_Restante'].round(2)
     if 'Combustivel_no_Inicio_Volta' in df_table.columns:
         df_table = df_table.rename(columns={'Combustivel_no_Inicio_Volta': 'Tanque_Início'})
@@ -327,18 +362,34 @@ app_mode = st.sidebar.radio("Operação", ["📡 Live Telemetry", "📂 Post-Rac
 
 df_live = pd.DataFrame()
 is_cloud_active = False
+base_url = ""
+session_id = ""
 
 if app_mode == "📡 Live Telemetry":
     conn_mode = st.sidebar.selectbox("Fonte de Dados", ["Local (Pasta/CSV)", "Cloud (API Server)"])
 
     if conn_mode == "Cloud (API Server)":
-        server_ip = st.sidebar.text_input("URL Base do Servidor", "https://iracing-telemetry-vfak.onrender.com")
+        server_ip  = st.sidebar.text_input("URL Base do Servidor", "https://iracing-telemetry-vfak.onrender.com")
         session_id = st.sidebar.text_input("ID Sessão", "Daytona_Test")
-        base_url = server_ip.strip().rstrip('/')
-        CLOUD_URL = f"{base_url}/session/{session_id}"
-        df_live = fetch_cloud_data(CLOUD_URL)
+        base_url   = server_ip.strip().rstrip('/')
+        CLOUD_URL  = f"{base_url}/session/{session_id}"
+        df_live    = fetch_cloud_data(CLOUD_URL)
         is_cloud_active = True
         render_traffic_light({}, is_cloud=True, df=df_live)
+
+        # FIX #6: reset de sessão — requer endpoint DELETE /session/{id} no FastAPI
+        st.sidebar.divider()
+        if st.sidebar.button("🗑️ Resetar Dados da Sessão", type="secondary",
+                             help="Apaga todos os dados desta Session ID no servidor (útil para testes)"):
+            try:
+                r = requests.delete(f"{base_url}/session/{session_id}", timeout=5)
+                if r.status_code == 200:
+                    st.sidebar.success("✅ Sessão resetada com sucesso!")
+                    st.rerun()
+                else:
+                    st.sidebar.error(f"Servidor retornou {r.status_code}. Verifique se o endpoint DELETE existe.")
+            except Exception as e:
+                st.sidebar.error("⚠️ Falha ao conectar com o servidor.")
     else:
         if LOG_DIR.exists():
             files = [f for f in os.listdir(LOG_DIR) if f.startswith("stint_")]
